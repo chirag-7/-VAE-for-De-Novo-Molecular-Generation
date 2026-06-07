@@ -1,11 +1,10 @@
 import pandas as pd
 import torch
-from rdkit import Chem
-from torch.utils.data import Dataset, DataLoader
-from sklearn.model_selection import train_test_split
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
+from sklearn.model_selection import train_test_split
+from torch.utils.data import DataLoader, Dataset
 
 
 class SMILESDataset(Dataset):
@@ -27,7 +26,9 @@ class SMILESDataset(Dataset):
         return tokenized_smiles
 
 
-def smiles_data_loader(csv_file, tokenizer, batch_size, max_len=None, test_split=0.2, shuffle=True, num_workers=0):
+def smiles_data_loader(
+    csv_file, tokenizer, batch_size, max_len=None, test_split=0.2, shuffle=True, num_workers=0
+):
     """
     Load SMILES data from a CSV file, tokenize it, and split into train and test sets.
 
@@ -45,7 +46,7 @@ def smiles_data_loader(csv_file, tokenizer, batch_size, max_len=None, test_split
         test_loader (DataLoader): DataLoader for the test set.
     """
     data = pd.read_csv(csv_file)
-    smiles_list = data['SMILES'].tolist()
+    smiles_list = data["SMILES"].tolist()
 
     if max_len is None:
         max_len = max(len(smiles) for smiles in smiles_list)
@@ -54,17 +55,21 @@ def smiles_data_loader(csv_file, tokenizer, batch_size, max_len=None, test_split
     train_dataset = SMILESDataset(train_smiles, tokenizer, max_len)
     test_dataset = SMILESDataset(test_smiles, tokenizer, max_len)
 
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers)
-    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers)
+    train_loader = DataLoader(
+        train_dataset, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers
+    )
+    test_loader = DataLoader(
+        test_dataset, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers
+    )
 
     return train_loader, test_loader
 
 
 class SimpleTokenizer:
     def __init__(self):
-        self.char_to_idx = {'C': 0, 'O': 1, '(': 2, ')': 3, '<pad>': 4}
+        self.char_to_idx = {"C": 0, "O": 1, "(": 2, ")": 3, "<pad>": 4}
         self.idx_to_char = {v: k for k, v in self.char_to_idx.items()}
-        self.pad_idx = self.char_to_idx['<pad>']
+        self.pad_idx = self.char_to_idx["<pad>"]
 
     def tokenize(self, smiles, max_len):
         """
@@ -83,19 +88,21 @@ class SimpleTokenizer:
 
 
 class BetaTCVAE(nn.Module):
-    def __init__(self, vocab_size, embedding_dim, hidden_dim, latent_dim, nhead, num_layers, pad_idx, device):
+    def __init__(
+        self, vocab_size, embedding_dim, hidden_dim, latent_dim, nhead, num_layers, pad_idx, device
+    ):
         super(BetaTCVAE, self).__init__()
 
         self.embedding = nn.Embedding(vocab_size, embedding_dim, padding_idx=pad_idx)
         self.encoder = nn.TransformerEncoder(
-            nn.TransformerEncoderLayer(embedding_dim, nhead, hidden_dim),
-            num_layers=num_layers)
+            nn.TransformerEncoderLayer(embedding_dim, nhead, hidden_dim), num_layers=num_layers
+        )
         self.mu = nn.Linear(embedding_dim, latent_dim)
         self.log_var = nn.Linear(embedding_dim, latent_dim)
 
         self.decoder = nn.TransformerDecoder(
-            nn.TransformerDecoderLayer(embedding_dim, nhead, hidden_dim),
-            num_layers=num_layers)
+            nn.TransformerDecoderLayer(embedding_dim, nhead, hidden_dim), num_layers=num_layers
+        )
         self.fc_out = nn.Linear(embedding_dim, vocab_size)
 
         self.device = device
@@ -119,7 +126,7 @@ class BetaTCVAE(nn.Module):
 
 
 def loss_function(recon_x, x, mu, log_var, beta, gamma):
-    BCE = F.cross_entropy(recon_x.view(-1, recon_x.size(-1)), x.view(-1), reduction='mean')
+    BCE = F.cross_entropy(recon_x.view(-1, recon_x.size(-1)), x.view(-1), reduction="mean")
     KLD = -0.5 * torch.mean(1 + log_var - mu.pow(2) - log_var.exp())
     TC = (log_var.exp() - 1 - log_var).mean()
 
@@ -169,11 +176,13 @@ def test(model, test_loader, device, beta, gamma):
 
 def main():
     simple_tokenizer = SimpleTokenizer()
-    csv_file = 'molecules.csv'
+    csv_file = "molecules.csv"
     batch_size = 64
     max_len = None  # Can be set to a specific value, or let the function calculate
 
-    train_loader, test_loader = smiles_data_loader(csv_file, simple_tokenizer.tokenize, batch_size, max_len)
+    train_loader, test_loader = smiles_data_loader(
+        csv_file, simple_tokenizer.tokenize, batch_size, max_len
+    )
 
     # Hyperparameters
     vocab_size = 6  # Set according to the actual vocabulary size
@@ -183,10 +192,12 @@ def main():
     nhead = 4
     num_layers = 2
     pad_idx = 4  # Set according to the actual padding index
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # Create the model
-    model = BetaTCVAE(vocab_size, embedding_dim, hidden_dim, latent_dim, nhead, num_layers, pad_idx, device).to(device)
+    model = BetaTCVAE(
+        vocab_size, embedding_dim, hidden_dim, latent_dim, nhead, num_layers, pad_idx, device
+    ).to(device)
 
     # Optimizer
     optimizer = optim.Adam(model.parameters(), lr=0.001)
@@ -204,7 +215,7 @@ def main():
         print(f"Test Loss: {test_loss:.4f}, Test Accuracy: {test_accuracy:.4f}")
 
     # Save the model
-    torch.save(model.state_dict(), 'beta_tc_vae_model.pth')
+    torch.save(model.state_dict(), "beta_tc_vae_model.pth")
 
 
 if __name__ == "__main__":

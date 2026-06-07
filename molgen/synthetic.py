@@ -1,7 +1,7 @@
-import random
 import csv
+import random
+
 from rdkit import Chem
-from rdkit.Chem import Descriptors
 
 
 def consecutive_hydroxyls(chain):
@@ -9,7 +9,7 @@ def consecutive_hydroxyls(chain):
     Check if the chain contains five or more consecutive hydroxyl groups.
 
     Args:
-        chain (list of str): The carbon chain with possible hydroxyl groups. 
+        chain (list of str): The carbon chain with possible hydroxyl groups.
 
     Returns:
         bool: True if there are five or more consecutive hydroxyl groups, False otherwise.
@@ -18,10 +18,10 @@ def consecutive_hydroxyls(chain):
     max_count = 0
     i = 0
     while i < len(chain) - 1:
-        if chain[i] == 'C' and chain[i + 1] == '(':
+        if chain[i] == "C" and chain[i + 1] == "(":
             count += 1
             max_count = max(max_count, count)
-        elif chain[i] == 'C' and chain[i + 1] == 'C':
+        elif chain[i] == "C" and chain[i + 1] == "C":
             count = 0
         i += 1
     return max_count >= 5
@@ -40,13 +40,13 @@ def generate_molecule(min_carbon, max_carbon):
     """
     while True:
         num_carbon = random.randint(min_carbon, max_carbon)
-        carbon_chain = ['C' for _ in range(num_carbon)]
+        carbon_chain = ["C" for _ in range(num_carbon)]
 
         # Randomly generate hydroxyl groups
         num_hydroxyl = random.randint(1, num_carbon)
         hydroxyl_positions = random.sample(range(num_carbon), num_hydroxyl)
         for pos in hydroxyl_positions:
-            carbon_chain[pos] += '(O)'
+            carbon_chain[pos] += "(O)"
 
         if consecutive_hydroxyls(carbon_chain):
             continue
@@ -56,10 +56,10 @@ def generate_molecule(min_carbon, max_carbon):
         branch_positions = random.sample(range(num_carbon), num_branches)
         for pos in branch_positions:
             branch_length = random.randint(1, 10)
-            branch = 'C' * branch_length
-            carbon_chain[pos] += '(' + branch + ')'
+            branch = "C" * branch_length
+            carbon_chain[pos] += "(" + branch + ")"
 
-        smiles = ''.join(carbon_chain)
+        smiles = "".join(carbon_chain)
         mol = Chem.MolFromSmiles(smiles)
         if mol is not None:
             return smiles
@@ -73,14 +73,14 @@ def save_molecules_to_csv(filename, molecules):
         filename (str): The name of the CSV file.
         molecules (list of str): The list of SMILES strings.
     """
-    with open(filename, 'w', newline='', encoding='utf-8') as csvfile:
+    with open(filename, "w", newline="", encoding="utf-8") as csvfile:
         csv_writer = csv.writer(csvfile)
-        csv_writer.writerow(['SMILES'])  # Write the header
+        csv_writer.writerow(["SMILES"])  # Write the header
 
         for smiles in molecules:
             csv_writer.writerow([smiles])  # Write each row
 
-    print(f'Successfully saved {len(molecules)} generated molecules to {filename}')
+    print(f"Successfully saved {len(molecules)} generated molecules to {filename}")
 
 
 def main():
@@ -95,7 +95,7 @@ def main():
     generated_molecules = list(set(generated_molecules))
 
     # Save the generated molecules to a CSV file
-    save_molecules_to_csv('molecules.csv', generated_molecules)
+    save_molecules_to_csv("molecules.csv", generated_molecules)
 
 
 if __name__ == "__main__":
