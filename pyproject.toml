@@ -50,3 +50,13 @@ Issues = "https://github.com/DaoyuanLi2816/Molecule-Generator/issues"
 
 [tool.setuptools.packages.find]
 include = ["molgen*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+
+[tool.ruff.format]
+quote-style = "double"

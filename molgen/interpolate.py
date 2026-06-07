@@ -1,12 +1,15 @@
-import torch
-from rdkit import Chem
-import torch.nn.functional as F
 import warnings
-from rdkit import RDLogger
+
+import torch
+import torch.nn.functional as F
+from rdkit import Chem, RDLogger
+
 from molgen.vae import BetaTCVAE, SimpleTokenizer
 
 
-def interpolate_smiles(model_path, smiles_1, smiles_2, tokenizer, max_len, device, num_steps=5, temperature=1.0):
+def interpolate_smiles(
+    model_path, smiles_1, smiles_2, tokenizer, max_len, device, num_steps=5, temperature=1.0
+):
     """
     Interpolate between two SMILES strings in the latent space.
 
@@ -21,7 +24,7 @@ def interpolate_smiles(model_path, smiles_1, smiles_2, tokenizer, max_len, devic
         temperature (float): Temperature for sampling.
 
     Returns:
-        list of str: List of interpolated SMILES strings. 
+        list of str: List of interpolated SMILES strings.
     """
     # Load the model
     vocab_size = 6
@@ -31,9 +34,11 @@ def interpolate_smiles(model_path, smiles_1, smiles_2, tokenizer, max_len, devic
     nhead = 4
     num_layers = 2
     pad_idx = 4
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    model = BetaTCVAE(vocab_size, embedding_dim, hidden_dim, latent_dim, nhead, num_layers, pad_idx, device).to(device)
+    model = BetaTCVAE(
+        vocab_size, embedding_dim, hidden_dim, latent_dim, nhead, num_layers, pad_idx, device
+    ).to(device)
     model.load_state_dict(torch.load(model_path))
     model.eval()
 
@@ -59,12 +64,17 @@ def interpolate_smiles(model_path, smiles_1, smiles_2, tokenizer, max_len, devic
         out = F.softmax(out / temperature, dim=-1)
 
         generated_smiles_idx = torch.multinomial(out.squeeze(0), 1).cpu().numpy().flatten()
-        generated_smiles_str = ''.join(
-            [tokenizer.idx_to_char[min(int(idx), 4)] for idx in generated_smiles_idx if idx != tokenizer.pad_idx])
+        generated_smiles_str = "".join(
+            [
+                tokenizer.idx_to_char[min(int(idx), 4)]
+                for idx in generated_smiles_idx
+                if idx != tokenizer.pad_idx
+            ]
+        )
 
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            RDLogger.DisableLog('rdApp.*')
+            RDLogger.DisableLog("rdApp.*")
             mol = Chem.MolFromSmiles(generated_smiles_str)
 
         if mol is not None:
@@ -75,21 +85,29 @@ def interpolate_smiles(model_path, smiles_1, smiles_2, tokenizer, max_len, devic
 
 def main():
     # Example usage
-    input_smiles = 'OC(CCCCCC)C(O)C(O)C(O)CCCCCCCCC'
-    input_smiles_2 = 'OCC(O)C(O)C(O)C(CCCC)CCCCCCCC'
+    input_smiles = "OC(CCCCCC)C(O)C(O)C(O)CCCCCCCCC"
+    input_smiles_2 = "OCC(O)C(O)C(O)C(CCCC)CCCCCCCC"
     num_steps = 5000
     max_len = 172  # Set to the maximum sequence length used during training
     temperature = 1.5
-    model_path = 'beta_tc_vae_model.pth'
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    model_path = "beta_tc_vae_model.pth"
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     simple_tokenizer = SimpleTokenizer()
-    interpolated_smiles = interpolate_smiles(model_path, input_smiles, input_smiles_2, simple_tokenizer, max_len,
-                                             device, num_steps, temperature)
+    interpolated_smiles = interpolate_smiles(
+        model_path,
+        input_smiles,
+        input_smiles_2,
+        simple_tokenizer,
+        max_len,
+        device,
+        num_steps,
+        temperature,
+    )
 
     print(f"Input SMILES: {input_smiles}")
     print(f"Input SMILES: {input_smiles_2}")
-    print(f"Generated SMILES:")
+    print("Generated SMILES:")
     for smiles in interpolated_smiles:
         print(smiles)
 
