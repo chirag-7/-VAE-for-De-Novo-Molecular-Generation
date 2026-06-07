@@ -1,3 +1,5 @@
+import math
+
 import pandas as pd
 import torch
 import torch.nn as nn
@@ -87,6 +89,24 @@ class SimpleTokenizer:
         return torch.tensor(tokenized_smiles, dtype=torch.long)
 
 
+class PositionalEncoding(nn.Module):
+    """Sinusoidal positional encoding for batch-first (batch, seq, dim) inputs."""
+
+    def __init__(self, embedding_dim, max_len=2048):
+        super().__init__()
+        pe = torch.zeros(max_len, embedding_dim)
+        position = torch.arange(max_len).unsqueeze(1).float()
+        div_term = torch.exp(
+            torch.arange(0, embedding_dim, 2).float() * (-math.log(10000.0) / embedding_dim)
+        )
+        pe[:, 0::2] = torch.sin(position * div_term)
+        pe[:, 1::2] = torch.cos(position * div_term[: embedding_dim // 2])
+        self.register_buffer("pe", pe.unsqueeze(0))  # (1, max_len, embedding_dim)
+
+    def forward(self, x):
+        return x + self.pe[:, : x.size(1)]
+
+
 class BetaTCVAE(nn.Module):
     def __init__(
         self, vocab_size, embedding_dim, hidden_dim, latent_dim, nhead, num_layers, pad_idx, device
@@ -94,6 +114,7 @@ class BetaTCVAE(nn.Module):
         super(BetaTCVAE, self).__init__()
 
         self.embedding = nn.Embedding(vocab_size, embedding_dim, padding_idx=pad_idx)
+        self.pos_encoder = PositionalEncoding(embedding_dim)
         self.encoder = nn.TransformerEncoder(
             nn.TransformerEncoderLayer(embedding_dim, nhead, hidden_dim, batch_first=True),
             num_layers=num_layers,
@@ -118,7 +139,7 @@ class BetaTCVAE(nn.Module):
     def forward(self, x):
         # Mask padding positions so attention never attends to <pad> tokens.
         pad_mask = x == self.pad_idx  # (batch, seq), True where padded
-        embedded = self.embedding(x)
+        embedded = self.pos_encoder(self.embedding(x))
         encoded = self.encoder(embedded, src_key_padding_mask=pad_mask)
         mu = self.mu(encoded)
         log_var = self.log_var(encoded)
