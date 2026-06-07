@@ -2,7 +2,7 @@
 
 import torch
 
-from molgen.vae import BetaTCVAE, loss_function, masked_token_accuracy
+from molgen.vae import BetaTCVAE, PositionalEncoding, loss_function, masked_token_accuracy
 
 
 def _tiny_model():
@@ -94,3 +94,11 @@ def test_encoder_processes_sequences_independently():
         enc_both = model.encoder(model.embedding(torch.cat([a, b], dim=0)))
         enc_a = model.encoder(model.embedding(a))
     assert torch.allclose(enc_both[0], enc_a[0], atol=1e-5)
+
+
+def test_positional_encoding_is_position_dependent():
+    pe = PositionalEncoding(embedding_dim=16)
+    out = pe(torch.zeros(1, 10, 16))
+    assert out.shape == (1, 10, 16)
+    # With a zero input the output is the positional code, which differs per position.
+    assert not torch.allclose(out[0, 0], out[0, 1])
