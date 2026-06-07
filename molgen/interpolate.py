@@ -3,7 +3,7 @@ from rdkit import Chem
 import torch.nn.functional as F
 import warnings
 from rdkit import RDLogger
-from VAE import BetaTCVAE, SimpleTokenizer
+from molgen.vae import BetaTCVAE, SimpleTokenizer
 
 
 def interpolate_smiles(model_path, smiles_1, smiles_2, tokenizer, max_len, device, num_steps=5, temperature=1.0):
@@ -73,7 +73,7 @@ def interpolate_smiles(model_path, smiles_1, smiles_2, tokenizer, max_len, devic
     return list(set(interpolated_smiles))
 
 
-if __name__ == "__main__":
+def main():
     # Example usage
     input_smiles = 'OC(CCCCCC)C(O)C(O)C(O)CCCCCCCCC'
     input_smiles_2 = 'OCC(O)C(O)C(O)C(CCCC)CCCCCCCC'
@@ -92,3 +92,7 @@ if __name__ == "__main__":
     print(f"Generated SMILES:")
     for smiles in interpolated_smiles:
         print(smiles)
+
+
+if __name__ == "__main__":
+    main()
