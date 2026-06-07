@@ -27,3 +27,8 @@ def test_tokenize_decode_roundtrip():
     out = tok.tokenize(smiles, max_len=len(smiles))
     decoded = "".join(tok.idx_to_char[int(i)] for i in out)
     assert decoded == smiles
+
+
+def test_vocab_size_matches_token_count():
+    tok = SimpleTokenizer()
+    assert tok.vocab_size == len(tok.char_to_idx) == 5

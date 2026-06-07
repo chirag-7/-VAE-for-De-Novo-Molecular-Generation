@@ -9,15 +9,16 @@ from molgen.vae import BetaTCVAE, SimpleTokenizer
 
 
 def _save_tiny_model(path):
-    # Architecture must match the hyperparameters hardcoded in generate/interpolate.
+    # Architecture must match the config generate/interpolate derive from the tokenizer.
+    tok = SimpleTokenizer()
     model = BetaTCVAE(
-        vocab_size=6,
+        vocab_size=tok.vocab_size,
         embedding_dim=16,
         hidden_dim=64,
         latent_dim=16,
         nhead=4,
         num_layers=2,
-        pad_idx=4,
+        pad_idx=tok.pad_idx,
         device=torch.device("cpu"),
     )
     torch.save(model.state_dict(), path)
