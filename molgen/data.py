@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from functools import partial
+from importlib.resources import files
 
 import pandas as pd
 import torch
@@ -79,3 +80,14 @@ def build_dataloaders(
         test_ds, batch_size=batch_size, shuffle=False, num_workers=num_workers, collate_fn=collate
     )
     return train_loader, test_loader
+
+
+def load_sample_smiles() -> list[str]:
+    """Return the bundled sample of ~500 diverse, valid SMILES strings.
+
+    Useful for examples, tests, and metric smoke-checks without downloading a
+    full dataset. The molecules are synthetic (see ``synthetic.py``) but cover
+    rings, heteroatoms, halogens, and unsaturation.
+    """
+    text = files("molgen.datasets").joinpath("sample_smiles.smi").read_text(encoding="utf-8")
+    return [line.strip() for line in text.splitlines() if line.strip()]
