@@ -49,3 +49,16 @@ def test_load_sample_smiles_returns_valid_molecules():
     assert len(smiles) >= 100
     # Spot-check that the bundled molecules parse.
     assert all(is_valid_smiles(s) for s in smiles[:50])
+
+
+def test_augmentation_preserves_the_molecule():
+    from molgen.chem import canonicalize_smiles
+
+    smiles = "CCOc1ccccc1"
+    tok = SmilesTokenizer.from_smiles([smiles, *load_sample_smiles()])
+    ds = SmilesDataset([smiles], tok, augment=True)
+    target = canonicalize_smiles(smiles)
+    # Each augmented encoding is a different ordering of the *same* molecule.
+    for _ in range(10):
+        decoded = tok.decode(ds[0].tolist())
+        assert canonicalize_smiles(decoded) == target

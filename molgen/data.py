@@ -11,6 +11,8 @@ import torch
 from sklearn.model_selection import train_test_split
 from torch.utils.data import DataLoader, Dataset
 
+from molgen.chem import randomize_smiles
+
 
 class SmilesDataset(Dataset):
     """A dataset of SMILES strings encoded to token-id tensors.
@@ -20,16 +22,29 @@ class SmilesDataset(Dataset):
     short molecules don't waste memory.
     """
 
-    def __init__(self, smiles_list: Sequence[str], tokenizer, max_len: int | None = None):
+    def __init__(
+        self,
+        smiles_list: Sequence[str],
+        tokenizer,
+        max_len: int | None = None,
+        augment: bool = False,
+    ):
         self.smiles_list = list(smiles_list)
         self.tokenizer = tokenizer
         self.max_len = max_len
+        self.augment = augment
 
     def __len__(self) -> int:
         return len(self.smiles_list)
 
     def __getitem__(self, idx: int) -> torch.Tensor:
-        ids = self.tokenizer.encode(self.smiles_list[idx], add_bos_eos=True, max_len=self.max_len)
+        smiles = self.smiles_list[idx]
+        if self.augment:
+            # SMILES enumeration: a random valid ordering of the same molecule.
+            randomized = randomize_smiles(smiles)
+            if randomized is not None:
+                smiles = randomized
+        ids = self.tokenizer.encode(smiles, add_bos_eos=True, max_len=self.max_len)
         return torch.tensor(ids, dtype=torch.long)
 
 
@@ -61,13 +76,18 @@ def build_dataloaders(
     shuffle: bool = True,
     num_workers: int = 0,
     seed: int = 42,
+    augment: bool = False,
 ) -> tuple[DataLoader, DataLoader]:
-    """Split SMILES into train/test sets and build padded DataLoaders."""
+    """Split SMILES into train/test sets and build padded DataLoaders.
+
+    When ``augment`` is set, the training set uses SMILES enumeration (a random
+    valid ordering per access); the test set is never augmented.
+    """
     train_smiles, test_smiles = train_test_split(
         list(smiles_list), test_size=test_split, random_state=seed
     )
     collate = make_collate_fn(tokenizer.pad_id)
-    train_ds = SmilesDataset(train_smiles, tokenizer, max_len)
+    train_ds = SmilesDataset(train_smiles, tokenizer, max_len, augment=augment)
     test_ds = SmilesDataset(test_smiles, tokenizer, max_len)
     train_loader = DataLoader(
         train_ds,
