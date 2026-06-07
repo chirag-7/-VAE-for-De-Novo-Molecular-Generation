@@ -95,13 +95,15 @@ class BetaTCVAE(nn.Module):
 
         self.embedding = nn.Embedding(vocab_size, embedding_dim, padding_idx=pad_idx)
         self.encoder = nn.TransformerEncoder(
-            nn.TransformerEncoderLayer(embedding_dim, nhead, hidden_dim), num_layers=num_layers
+            nn.TransformerEncoderLayer(embedding_dim, nhead, hidden_dim, batch_first=True),
+            num_layers=num_layers,
         )
         self.mu = nn.Linear(embedding_dim, latent_dim)
         self.log_var = nn.Linear(embedding_dim, latent_dim)
 
         self.decoder = nn.TransformerDecoder(
-            nn.TransformerDecoderLayer(embedding_dim, nhead, hidden_dim), num_layers=num_layers
+            nn.TransformerDecoderLayer(embedding_dim, nhead, hidden_dim, batch_first=True),
+            num_layers=num_layers,
         )
         self.fc_out = nn.Linear(embedding_dim, vocab_size)
 
@@ -114,13 +116,20 @@ class BetaTCVAE(nn.Module):
         return mu + eps * std
 
     def forward(self, x):
+        # Mask padding positions so attention never attends to <pad> tokens.
+        pad_mask = x == self.pad_idx  # (batch, seq), True where padded
         embedded = self.embedding(x)
-        encoded = self.encoder(embedded)
+        encoded = self.encoder(embedded, src_key_padding_mask=pad_mask)
         mu = self.mu(encoded)
         log_var = self.log_var(encoded)
         z = self.reparameterize(mu, log_var)
 
-        decoded = self.decoder(z, encoded)
+        decoded = self.decoder(
+            z,
+            encoded,
+            tgt_key_padding_mask=pad_mask,
+            memory_key_padding_mask=pad_mask,
+        )
         out = self.fc_out(decoded)
 
         return out, mu, log_var
