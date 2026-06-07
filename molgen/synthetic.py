@@ -1,7 +1,9 @@
 import csv
 import random
 
-from rdkit import Chem
+from rdkit import Chem, RDLogger
+
+RDLogger.DisableLog("rdApp.*")
 
 
 def consecutive_hydroxyls(chain):
@@ -63,6 +65,74 @@ def generate_molecule(min_carbon, max_carbon):
         mol = Chem.MolFromSmiles(smiles)
         if mol is not None:
             return smiles
+
+
+# Building blocks for assembling diverse, valid molecules (rings, heteroatoms,
+# halogens, unsaturation) -- in contrast to generate_molecule's saturated C/O chains.
+_FRAGMENTS = [
+    "C",
+    "CC",
+    "CCC",
+    "C(C)C",
+    "CCO",
+    "CCN",
+    "CC=O",
+    "CC(=O)O",
+    "CO",
+    "CN",
+    "C=C",
+    "C#N",
+    "CF",
+    "CCl",
+    "CBr",
+    "CS",
+    "c1ccccc1",
+    "c1ccncc1",
+    "c1ccsc1",
+    "c1cc[nH]c1",
+    "c1ccoc1",
+    "C1CCCCC1",
+    "C1CCNCC1",
+    "C1CCOCC1",
+]
+
+
+def _combine_fragments(smiles_a, smiles_b):
+    """Join two fragments with a single bond (a's last atom to b's first atom).
+
+    Returns a canonical SMILES, or None if the join violates valence.
+    """
+    mol_a = Chem.MolFromSmiles(smiles_a)
+    mol_b = Chem.MolFromSmiles(smiles_b)
+    if mol_a is None or mol_b is None:
+        return None
+    combined = Chem.RWMol(Chem.CombineMols(mol_a, mol_b))
+    combined.AddBond(mol_a.GetNumAtoms() - 1, mol_a.GetNumAtoms(), Chem.BondType.SINGLE)
+    try:
+        Chem.SanitizeMol(combined)
+    except Exception:
+        return None
+    return Chem.MolToSmiles(combined)
+
+
+def generate_fragment_molecule(min_fragments=1, max_fragments=4, attempts=20):
+    """Assemble a diverse, valid molecule from random fragments.
+
+    Unlike generate_molecule (saturated C/O chains), this samples rings,
+    heteroatoms (N, O, S), halogens, and unsaturation. Returns a canonical
+    SMILES string, falling back to a trivial molecule if assembly keeps failing.
+    """
+    for _ in range(attempts):
+        smiles = random.choice(_FRAGMENTS)
+        for _ in range(random.randint(min_fragments, max_fragments) - 1):
+            nxt = _combine_fragments(smiles, random.choice(_FRAGMENTS))
+            if nxt is None:
+                smiles = None
+                break
+            smiles = nxt
+        if smiles is not None and Chem.MolFromSmiles(smiles) is not None:
+            return smiles
+    return "CCO"
 
 
 def save_molecules_to_csv(filename, molecules):
