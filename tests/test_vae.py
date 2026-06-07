@@ -80,3 +80,17 @@ def test_masked_token_accuracy_excludes_padding():
     correct2, total2 = masked_token_accuracy(preds_wrong, targets, pad_idx=9)
     assert total2 == 2
     assert correct2 == 1
+
+
+def test_encoder_processes_sequences_independently():
+    # With batch_first attention each sequence is encoded independently of the
+    # other rows in the batch. Under the old batch_first=False bug, attention
+    # ran across the batch dimension and this invariant would fail.
+    model = _tiny_model()
+    model.eval()
+    a = torch.tensor([[0, 1, 2, 3, 0, 1]])
+    b = torch.tensor([[1, 1, 0, 0, 2, 3]])
+    with torch.no_grad():
+        enc_both = model.encoder(model.embedding(torch.cat([a, b], dim=0)))
+        enc_a = model.encoder(model.embedding(a))
+    assert torch.allclose(enc_both[0], enc_a[0], atol=1e-5)
