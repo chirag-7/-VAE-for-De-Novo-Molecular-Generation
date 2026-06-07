@@ -2,7 +2,7 @@
 
 import torch
 
-from molgen.vae import BetaTCVAE, loss_function
+from molgen.vae import BetaTCVAE, loss_function, masked_token_accuracy
 
 
 def _tiny_model():
@@ -66,3 +66,17 @@ def test_loss_ignores_pad_positions():
     loss_a_unmasked = loss_function(recon_a, x, mu, log_var, beta=1.0, gamma=0.1)
     loss_b_unmasked = loss_function(recon_b, x, mu, log_var, beta=1.0, gamma=0.1)
     assert not torch.allclose(loss_a_unmasked, loss_b_unmasked)
+
+
+def test_masked_token_accuracy_excludes_padding():
+    preds = torch.tensor([[0, 1, 2, 3]])
+    targets = torch.tensor([[0, 1, 9, 9]])  # last two positions are padding (idx 9)
+    correct, total = masked_token_accuracy(preds, targets, pad_idx=9)
+    assert total == 2  # only the two non-padding positions are counted
+    assert correct == 2
+
+    # A wrong prediction at a non-pad position lowers the count; pad mismatches are ignored.
+    preds_wrong = torch.tensor([[0, 7, 2, 3]])
+    correct2, total2 = masked_token_accuracy(preds_wrong, targets, pad_idx=9)
+    assert total2 == 2
+    assert correct2 == 1
