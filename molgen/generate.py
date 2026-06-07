@@ -41,7 +41,6 @@ def generate_nearby_smiles(
     nhead = 4
     num_layers = 2
     pad_idx = 4
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     model = BetaTCVAE(
         vocab_size, embedding_dim, hidden_dim, latent_dim, nhead, num_layers, pad_idx, device
