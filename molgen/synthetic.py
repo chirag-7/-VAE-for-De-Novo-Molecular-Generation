@@ -83,15 +83,20 @@ def save_molecules_to_csv(filename, molecules):
     print(f'Successfully saved {len(molecules)} generated molecules to {filename}')
 
 
-# Generate 100,000 unique molecules
-generated_molecules = []
-num_molecules = 100000
+def main():
+    # Generate 100,000 unique molecules
+    num_molecules = 100000
+    generated_molecules = []
 
-for _ in range(num_molecules):
-    smiles = generate_molecule(min_carbon=12, max_carbon=20)
-    generated_molecules.append(smiles)
+    for _ in range(num_molecules):
+        smiles = generate_molecule(min_carbon=12, max_carbon=20)
+        generated_molecules.append(smiles)
 
-generated_molecules = list(set(generated_molecules))
+    generated_molecules = list(set(generated_molecules))
 
-# Save the generated molecules to a CSV file
-save_molecules_to_csv('molecules.csv', generated_molecules)
+    # Save the generated molecules to a CSV file
+    save_molecules_to_csv('molecules.csv', generated_molecules)
+
+
+if __name__ == "__main__":
+    main()

@@ -3,7 +3,7 @@ from rdkit import Chem
 import torch.nn.functional as F
 import warnings
 from rdkit import RDLogger
-from VAE import BetaTCVAE, SimpleTokenizer
+from molgen.vae import BetaTCVAE, SimpleTokenizer
 
 def generate_nearby_smiles(model_path, smiles, tokenizer, max_len, num_samples, device, temperature=1.0, distance_multiplier=0.5):
     """
@@ -67,7 +67,7 @@ def generate_nearby_smiles(model_path, smiles, tokenizer, max_len, num_samples, 
     return list(set(generated_smiles))
 
 
-if __name__ == "__main__":
+def main():
     # Example usage
     input_smiles = 'OC(CCCCCC)C(O)C(O)C(O)CCCCCCCCC'
     num_samples = 5000
@@ -84,3 +84,7 @@ if __name__ == "__main__":
     print(f"Generated SMILES:")
     for smiles in generated_smiles:
         print(smiles)
+
+
+if __name__ == "__main__":
+    main()

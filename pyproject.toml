@@ -1,0 +1,52 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "molgen"
+version = "0.1.0"
+description = "A lightweight VAE-based molecular SMILES string generator"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "Daoyuan Li" }]
+keywords = [
+    "molecular-generation",
+    "smiles",
+    "vae",
+    "cheminformatics",
+    "deep-learning",
+    "drug-discovery",
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Chemistry",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "torch>=2.0",
+    "numpy>=1.21",
+    "pandas>=1.5",
+    "scikit-learn>=1.0",
+    "rdkit>=2022.9",
+    "tqdm>=4.60",
+]
+
+[project.optional-dependencies]
+selfies = ["selfies>=2.1"]
+dev = ["pytest>=7.0", "ruff>=0.4"]
+
+[project.urls]
+Homepage = "https://github.com/DaoyuanLi2816/Molecule-Generator"
+Repository = "https://github.com/DaoyuanLi2816/Molecule-Generator"
+Issues = "https://github.com/DaoyuanLi2816/Molecule-Generator/issues"
+
+[tool.setuptools.packages.find]
+include = ["molgen*"]

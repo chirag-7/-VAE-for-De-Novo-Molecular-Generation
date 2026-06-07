@@ -167,7 +167,7 @@ def test(model, test_loader, device, beta, gamma):
     return avg_loss, avg_accuracy
 
 
-if __name__ == "__main__":
+def main():
     simple_tokenizer = SimpleTokenizer()
     csv_file = 'molecules.csv'
     batch_size = 64
@@ -205,3 +205,7 @@ if __name__ == "__main__":
 
     # Save the model
     torch.save(model.state_dict(), 'beta_tc_vae_model.pth')
+
+
+if __name__ == "__main__":
+    main()
