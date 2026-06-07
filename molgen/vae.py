@@ -106,6 +106,7 @@ class BetaTCVAE(nn.Module):
         self.fc_out = nn.Linear(embedding_dim, vocab_size)
 
         self.device = device
+        self.pad_idx = pad_idx
 
     def reparameterize(self, mu, log_var):
         std = torch.exp(0.5 * log_var)
@@ -125,8 +126,10 @@ class BetaTCVAE(nn.Module):
         return out, mu, log_var
 
 
-def loss_function(recon_x, x, mu, log_var, beta, gamma):
-    BCE = F.cross_entropy(recon_x.view(-1, recon_x.size(-1)), x.view(-1), reduction="mean")
+def loss_function(recon_x, x, mu, log_var, beta, gamma, pad_idx=-100):
+    BCE = F.cross_entropy(
+        recon_x.view(-1, recon_x.size(-1)), x.view(-1), ignore_index=pad_idx, reduction="mean"
+    )
     KLD = -0.5 * torch.mean(1 + log_var - mu.pow(2) - log_var.exp())
     TC = (log_var.exp() - 1 - log_var).mean()
 
@@ -142,7 +145,7 @@ def train(model, train_loader, optimizer, device, beta, gamma):
         optimizer.zero_grad()
 
         recon_x, mu, log_var = model(x)
-        loss = loss_function(recon_x, x, mu, log_var, beta, gamma)
+        loss = loss_function(recon_x, x, mu, log_var, beta, gamma, pad_idx=model.pad_idx)
         loss.backward()
         total_loss += loss.item()
 
@@ -161,7 +164,7 @@ def test(model, test_loader, device, beta, gamma):
         for x in test_loader:
             x = x.to(device)
             recon_x, mu, log_var = model(x)
-            loss = loss_function(recon_x, x, mu, log_var, beta, gamma)
+            loss = loss_function(recon_x, x, mu, log_var, beta, gamma, pad_idx=model.pad_idx)
             total_loss += loss.item()
 
             preds = torch.argmax(recon_x, dim=-1)
