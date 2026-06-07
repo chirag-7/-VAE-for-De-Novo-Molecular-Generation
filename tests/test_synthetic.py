@@ -1,0 +1,31 @@
+"""Tests for the synthetic dataset generator."""
+
+import random
+
+from rdkit import Chem
+
+from molgen.synthetic import generate_molecule
+
+
+def test_generated_molecules_are_valid():
+    random.seed(0)
+    for _ in range(50):
+        smiles = generate_molecule(min_carbon=5, max_carbon=12)
+        assert Chem.MolFromSmiles(smiles) is not None, smiles
+
+
+def test_backbone_respects_minimum_carbons():
+    random.seed(1)
+    smiles = generate_molecule(min_carbon=8, max_carbon=8)
+    mol = Chem.MolFromSmiles(smiles)
+    n_carbons = sum(1 for atom in mol.GetAtoms() if atom.GetSymbol() == "C")
+    # 8-carbon backbone plus optional branches -> at least 8 carbons.
+    assert n_carbons >= 8
+
+
+def test_generation_is_reproducible_with_seed():
+    random.seed(123)
+    first = generate_molecule(min_carbon=6, max_carbon=10)
+    random.seed(123)
+    second = generate_molecule(min_carbon=6, max_carbon=10)
+    assert first == second
