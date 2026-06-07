@@ -136,6 +136,17 @@ def loss_function(recon_x, x, mu, log_var, beta, gamma, pad_idx=-100):
     return BCE + beta * KLD + gamma * TC
 
 
+def masked_token_accuracy(preds, targets, pad_idx):
+    """Token-level accuracy over non-padding positions.
+
+    Returns ``(num_correct, num_tokens)`` so callers can aggregate across batches.
+    """
+    mask = targets != pad_idx
+    correct = int(((preds == targets) & mask).sum().item())
+    total = int(mask.sum().item())
+    return correct, total
+
+
 def train(model, train_loader, optimizer, device, beta, gamma):
     model.train()
     total_loss = 0
@@ -168,11 +179,12 @@ def test(model, test_loader, device, beta, gamma):
             total_loss += loss.item()
 
             preds = torch.argmax(recon_x, dim=-1)
-            correct += (preds == x).sum().item()
-            total += x.numel()
+            batch_correct, batch_total = masked_token_accuracy(preds, x, model.pad_idx)
+            correct += batch_correct
+            total += batch_total
 
     avg_loss = total_loss / len(test_loader)
-    avg_accuracy = correct / total
+    avg_accuracy = correct / total if total > 0 else 0.0
 
     return avg_loss, avg_accuracy
 
