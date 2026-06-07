@@ -38,7 +38,7 @@ def interpolate_smiles(
     model = BetaTCVAE(
         vocab_size, embedding_dim, hidden_dim, latent_dim, nhead, num_layers, pad_idx, device
     ).to(device)
-    model.load_state_dict(torch.load(model_path))
+    model.load_state_dict(torch.load(model_path, map_location=device, weights_only=True))
     model.eval()
 
     tokenized_smiles_1 = tokenizer.tokenize(smiles_1, max_len).unsqueeze(0).to(device)
