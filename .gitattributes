@@ -1,0 +1,24 @@
+# Normalize line endings: store text as LF in the repository and check out
+# as LF everywhere. Keeps diffs clean across Windows/macOS/Linux contributors.
+* text=auto eol=lf
+
+# Python and config sources are always text/LF
+*.py    text eol=lf
+*.toml  text eol=lf
+*.cfg   text eol=lf
+*.ini   text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+*.md    text eol=lf
+*.txt   text eol=lf
+
+# Binary assets must never be line-ending converted
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.pt    binary
+*.pth   binary
+*.ckpt  binary
+*.npy   binary
+*.npz   binary
