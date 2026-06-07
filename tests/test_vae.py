@@ -45,3 +45,24 @@ def test_backward_pass_populates_gradients():
     loss.backward()
     grads = [p.grad for p in model.parameters() if p.requires_grad]
     assert any(g is not None and torch.isfinite(g).all() for g in grads)
+
+
+def test_loss_ignores_pad_positions():
+    # Targets at positions 2, 3, 4 are padding (pad_idx=4).
+    x = torch.tensor([[0, 1, 4, 4, 4]])
+    mu = torch.zeros(1, 5, 4)
+    log_var = torch.zeros(1, 5, 4)
+    recon_a = torch.randn(1, 5, 6)
+    recon_b = recon_a.clone()
+    # Change the logits only at the padding positions.
+    recon_b[:, 2:, :] = torch.randn(1, 3, 6)
+
+    # With masking, padding positions are ignored, so the loss is unchanged.
+    loss_a = loss_function(recon_a, x, mu, log_var, beta=1.0, gamma=0.1, pad_idx=4)
+    loss_b = loss_function(recon_b, x, mu, log_var, beta=1.0, gamma=0.1, pad_idx=4)
+    assert torch.allclose(loss_a, loss_b)
+
+    # Without masking (default ignore_index), those positions do count.
+    loss_a_unmasked = loss_function(recon_a, x, mu, log_var, beta=1.0, gamma=0.1)
+    loss_b_unmasked = loss_function(recon_b, x, mu, log_var, beta=1.0, gamma=0.1)
+    assert not torch.allclose(loss_a_unmasked, loss_b_unmasked)
