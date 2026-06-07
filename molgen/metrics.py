@@ -1,0 +1,78 @@
+"""Distribution-learning metrics for generated molecule sets (MOSES-style).
+
+All functions accept lists of SMILES strings. Validity-dependent metrics
+operate on the canonicalized valid subset, matching the MOSES conventions.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Sequence
+
+from rdkit import Chem
+from rdkit.Chem import DataStructs, rdFingerprintGenerator
+
+from molgen.chem import canonicalize_smiles
+
+_MORGAN = rdFingerprintGenerator.GetMorganGenerator(radius=2, fpSize=2048)
+
+
+def _canonical_valid(smiles_list: Sequence[str]) -> list[str]:
+    """Return the canonical SMILES of the valid molecules in the list."""
+    out = []
+    for smiles in smiles_list:
+        canonical = canonicalize_smiles(smiles)
+        if canonical is not None:
+            out.append(canonical)
+    return out
+
+
+def validity(smiles_list: Sequence[str]) -> float:
+    """Fraction of generated strings that are valid molecules."""
+    if not smiles_list:
+        return 0.0
+    return len(_canonical_valid(smiles_list)) / len(smiles_list)
+
+
+def uniqueness(smiles_list: Sequence[str]) -> float:
+    """Fraction of valid molecules that are unique (after canonicalization)."""
+    valid = _canonical_valid(smiles_list)
+    if not valid:
+        return 0.0
+    return len(set(valid)) / len(valid)
+
+
+def novelty(smiles_list: Sequence[str], reference: Sequence[str]) -> float:
+    """Fraction of unique valid molecules not present in the reference set."""
+    generated = set(_canonical_valid(smiles_list))
+    if not generated:
+        return 0.0
+    reference_set = set(_canonical_valid(reference))
+    novel = [s for s in generated if s not in reference_set]
+    return len(novel) / len(generated)
+
+
+def _fingerprints(smiles_list: Sequence[str]):
+    fps = []
+    for smiles in smiles_list:
+        mol = Chem.MolFromSmiles(smiles)
+        if mol is not None:
+            fps.append(_MORGAN.GetFingerprint(mol))
+    return fps
+
+
+def internal_diversity(smiles_list: Sequence[str]) -> float:
+    """Mean pairwise Tanimoto *distance* (1 - similarity) over Morgan fingerprints.
+
+    Higher means a more diverse set. Returns 0.0 for fewer than two molecules.
+    """
+    fps = _fingerprints(smiles_list)
+    n = len(fps)
+    if n < 2:
+        return 0.0
+    total, count = 0.0, 0
+    for i in range(n - 1):
+        sims = DataStructs.BulkTanimotoSimilarity(fps[i], fps[i + 1 :])
+        total += float(sum(sims))
+        count += len(sims)
+    mean_similarity = total / count if count else 0.0
+    return 1.0 - mean_similarity
