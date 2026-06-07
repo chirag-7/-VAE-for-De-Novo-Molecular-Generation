@@ -51,6 +51,9 @@ Issues = "https://github.com/DaoyuanLi2816/Molecule-Generator/issues"
 [tool.setuptools.packages.find]
 include = ["molgen*"]
 
+[tool.setuptools.package-data]
+"molgen.datasets" = ["*.smi"]
+
 [tool.ruff]
 line-length = 100
 target-version = "py39"

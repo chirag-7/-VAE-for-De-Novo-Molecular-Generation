@@ -2,7 +2,8 @@
 
 import torch
 
-from molgen.data import SmilesDataset, build_dataloaders, make_collate_fn
+from molgen.chem import is_valid_smiles
+from molgen.data import SmilesDataset, build_dataloaders, load_sample_smiles, make_collate_fn
 from molgen.tokenizers import SmilesTokenizer
 
 SMILES = ["CCO", "CCN", "c1ccccc1", "CC(=O)O", "C1CCCCC1", "CCCl", "CCBr", "CCS"]
@@ -41,3 +42,10 @@ def test_build_dataloaders_yields_batches():
     n_train = len(train_loader.dataset)
     n_test = len(test_loader.dataset)
     assert n_train + n_test == len(SMILES)
+
+
+def test_load_sample_smiles_returns_valid_molecules():
+    smiles = load_sample_smiles()
+    assert len(smiles) >= 100
+    # Spot-check that the bundled molecules parse.
+    assert all(is_valid_smiles(s) for s in smiles[:50])

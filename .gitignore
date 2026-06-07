@@ -73,4 +73,5 @@ wandb/
 data/raw/
 data/cache/
 *.smi
+!molgen/datasets/*.smi
 *.sdf
