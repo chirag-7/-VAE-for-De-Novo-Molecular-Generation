@@ -72,6 +72,7 @@ class SimpleTokenizer:
         self.char_to_idx = {"C": 0, "O": 1, "(": 2, ")": 3, "<pad>": 4}
         self.idx_to_char = {v: k for k, v in self.char_to_idx.items()}
         self.pad_idx = self.char_to_idx["<pad>"]
+        self.vocab_size = len(self.char_to_idx)
 
     def tokenize(self, smiles, max_len):
         """
@@ -230,13 +231,13 @@ def main():
     )
 
     # Hyperparameters
-    vocab_size = 6  # Set according to the actual vocabulary size
+    vocab_size = simple_tokenizer.vocab_size
     embedding_dim = 16
     hidden_dim = 64
     latent_dim = 16
     nhead = 4
     num_layers = 2
-    pad_idx = 4  # Set according to the actual padding index
+    pad_idx = simple_tokenizer.pad_idx
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # Create the model

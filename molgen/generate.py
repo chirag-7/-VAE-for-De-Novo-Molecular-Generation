@@ -34,13 +34,13 @@ def generate_nearby_smiles(
         list of str: List of generated SMILES strings.
     """
     # Load the model
-    vocab_size = 6
+    vocab_size = tokenizer.vocab_size
     embedding_dim = 16
     hidden_dim = 64
     latent_dim = 16
     nhead = 4
     num_layers = 2
-    pad_idx = 4
+    pad_idx = tokenizer.pad_idx
 
     model = BetaTCVAE(
         vocab_size, embedding_dim, hidden_dim, latent_dim, nhead, num_layers, pad_idx, device
