@@ -1,6 +1,15 @@
 """Tests for the basic generation metrics."""
 
-from molgen.metrics import internal_diversity, novelty, uniqueness, validity
+import pytest
+
+from molgen.metrics import (
+    internal_diversity,
+    novelty,
+    snn,
+    unique_scaffolds,
+    uniqueness,
+    validity,
+)
 
 
 def test_validity_fraction():
@@ -25,3 +34,18 @@ def test_internal_diversity_in_unit_range():
 
 def test_internal_diversity_zero_for_identical():
     assert internal_diversity(["CCO", "CCO", "CCO"]) < 1e-6
+
+
+def test_unique_scaffolds_shares_benzene_ring():
+    # Benzene and toluene have the same Bemis-Murcko scaffold (benzene).
+    assert unique_scaffolds(["c1ccccc1", "Cc1ccccc1"]) == 0.5
+
+
+def test_snn_is_one_against_itself():
+    molecules = ["c1ccccc1", "CCO", "CC(=O)O"]
+    assert snn(molecules, molecules) == pytest.approx(1.0)
+
+
+def test_snn_lower_for_dissimilar_reference():
+    similarity = snn(["c1ccccc1"], ["CCCCCCCCCC"])  # benzene vs. decane
+    assert similarity < 0.5

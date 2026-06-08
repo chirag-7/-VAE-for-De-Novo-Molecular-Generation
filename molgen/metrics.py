@@ -10,6 +10,7 @@ from collections.abc import Sequence
 
 from rdkit import Chem
 from rdkit.Chem import DataStructs, rdFingerprintGenerator
+from rdkit.Chem.Scaffolds import MurckoScaffold
 
 from molgen.chem import canonicalize_smiles
 
@@ -76,3 +77,33 @@ def internal_diversity(smiles_list: Sequence[str]) -> float:
         count += len(sims)
     mean_similarity = total / count if count else 0.0
     return 1.0 - mean_similarity
+
+
+def _scaffold(smiles: str) -> str | None:
+    mol = Chem.MolFromSmiles(smiles)
+    if mol is None:
+        return None
+    return MurckoScaffold.MurckoScaffoldSmiles(mol=mol)
+
+
+def unique_scaffolds(smiles_list: Sequence[str]) -> float:
+    """Fraction of distinct Bemis-Murcko scaffolds among the valid molecules."""
+    scaffolds = [s for s in (_scaffold(smi) for smi in smiles_list) if s is not None]
+    if not scaffolds:
+        return 0.0
+    return len(set(scaffolds)) / len(scaffolds)
+
+
+def snn(smiles_list: Sequence[str], reference: Sequence[str]) -> float:
+    """Mean similarity-to-nearest-neighbour (Tanimoto) from generated to reference.
+
+    For each generated molecule, take the maximum Tanimoto similarity to any
+    reference molecule, then average. High SNN with low novelty can indicate
+    memorisation of the training set.
+    """
+    gen_fps = _fingerprints(smiles_list)
+    ref_fps = _fingerprints(reference)
+    if not gen_fps or not ref_fps:
+        return 0.0
+    total = sum(max(DataStructs.BulkTanimotoSimilarity(fp, ref_fps)) for fp in gen_fps)
+    return total / len(gen_fps)
