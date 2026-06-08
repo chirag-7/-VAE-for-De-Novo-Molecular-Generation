@@ -110,9 +110,7 @@ def snn(smiles_list: Sequence[str], reference: Sequence[str]) -> float:
     return total / len(gen_fps)
 
 
-def evaluate_generation(
-    smiles_list: Sequence[str], reference: Sequence[str] | None = None
-) -> dict:
+def evaluate_generation(smiles_list: Sequence[str], reference: Sequence[str] | None = None) -> dict:
     """Compute a MOSES-style report for a set of generated SMILES.
 
     Includes validity, uniqueness, internal diversity, unique-scaffold fraction,
