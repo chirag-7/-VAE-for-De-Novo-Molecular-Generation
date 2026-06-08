@@ -3,6 +3,7 @@
 import pytest
 
 from molgen.metrics import (
+    evaluate_generation,
     internal_diversity,
     novelty,
     snn,
@@ -49,3 +50,19 @@ def test_snn_is_one_against_itself():
 def test_snn_lower_for_dissimilar_reference():
     similarity = snn(["c1ccccc1"], ["CCCCCCCCCC"])  # benzene vs. decane
     assert similarity < 0.5
+
+
+def test_evaluate_generation_report_structure():
+    generated = ["CCO", "c1ccccc1", "CC(=O)O", "invalid$$"]
+    report = evaluate_generation(generated, reference=["CCO"])
+    assert report["n_generated"] == 4
+    assert report["validity"] == 0.75
+    for key in ("uniqueness", "internal_diversity", "unique_scaffolds", "novelty", "snn"):
+        assert key in report
+    assert "qed" in report["properties"]
+
+
+def test_evaluate_generation_without_reference_omits_novelty():
+    report = evaluate_generation(["CCO", "c1ccccc1"])
+    assert "novelty" not in report
+    assert "snn" not in report

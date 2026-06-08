@@ -13,6 +13,7 @@ from rdkit.Chem import DataStructs, rdFingerprintGenerator
 from rdkit.Chem.Scaffolds import MurckoScaffold
 
 from molgen.chem import canonicalize_smiles
+from molgen.properties import property_summary
 
 _MORGAN = rdFingerprintGenerator.GetMorganGenerator(radius=2, fpSize=2048)
 
@@ -107,3 +108,27 @@ def snn(smiles_list: Sequence[str], reference: Sequence[str]) -> float:
         return 0.0
     total = sum(max(DataStructs.BulkTanimotoSimilarity(fp, ref_fps)) for fp in gen_fps)
     return total / len(gen_fps)
+
+
+def evaluate_generation(
+    smiles_list: Sequence[str], reference: Sequence[str] | None = None
+) -> dict:
+    """Compute a MOSES-style report for a set of generated SMILES.
+
+    Includes validity, uniqueness, internal diversity, unique-scaffold fraction,
+    and mean physico-chemical properties. When a ``reference`` (e.g. the training
+    set) is given, novelty and SNN are added. Internal-diversity / SNN are O(n^2)
+    in the set size, so pass a manageable sample for large runs.
+    """
+    report: dict = {
+        "n_generated": len(smiles_list),
+        "validity": validity(smiles_list),
+        "uniqueness": uniqueness(smiles_list),
+        "internal_diversity": internal_diversity(smiles_list),
+        "unique_scaffolds": unique_scaffolds(smiles_list),
+        "properties": property_summary(smiles_list),
+    }
+    if reference is not None:
+        report["novelty"] = novelty(smiles_list, reference)
+        report["snn"] = snn(smiles_list, reference)
+    return report
