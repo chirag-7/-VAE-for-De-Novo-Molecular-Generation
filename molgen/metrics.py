@@ -6,6 +6,7 @@ operate on the canonicalized valid subset, matching the MOSES conventions.
 
 from __future__ import annotations
 
+import random
 from collections.abc import Sequence
 
 from rdkit import Chem
@@ -110,23 +111,40 @@ def snn(smiles_list: Sequence[str], reference: Sequence[str]) -> float:
     return total / len(gen_fps)
 
 
-def evaluate_generation(smiles_list: Sequence[str], reference: Sequence[str] | None = None) -> dict:
+def _subsample(smiles_list: Sequence[str], sample_size: int | None, seed: int) -> list[str]:
+    """Deterministically sample down to ``sample_size`` items for O(n^2) metrics."""
+    items = list(smiles_list)
+    if sample_size is None or len(items) <= sample_size:
+        return items
+    return random.Random(seed).sample(items, sample_size)
+
+
+def evaluate_generation(
+    smiles_list: Sequence[str],
+    reference: Sequence[str] | None = None,
+    sample_size: int | None = 10000,
+    seed: int = 0,
+) -> dict:
     """Compute a MOSES-style report for a set of generated SMILES.
 
     Includes validity, uniqueness, internal diversity, unique-scaffold fraction,
     and mean physico-chemical properties. When a ``reference`` (e.g. the training
-    set) is given, novelty and SNN are added. Internal-diversity / SNN are O(n^2)
-    in the set size, so pass a manageable sample for large runs.
+    set) is given, novelty and SNN are added.
+
+    Internal diversity and SNN are O(n^2) in the set size, so they are computed
+    on a deterministic random sample of at most ``sample_size`` molecules (pass
+    ``sample_size=None`` to use the full set). All other metrics use the full set.
     """
+    diversity_set = _subsample(smiles_list, sample_size, seed)
     report: dict = {
         "n_generated": len(smiles_list),
         "validity": validity(smiles_list),
         "uniqueness": uniqueness(smiles_list),
-        "internal_diversity": internal_diversity(smiles_list),
+        "internal_diversity": internal_diversity(diversity_set),
         "unique_scaffolds": unique_scaffolds(smiles_list),
         "properties": property_summary(smiles_list),
     }
     if reference is not None:
         report["novelty"] = novelty(smiles_list, reference)
-        report["snn"] = snn(smiles_list, reference)
+        report["snn"] = snn(diversity_set, reference)
     return report
