@@ -11,7 +11,7 @@ generator architectures, a mixed-precision training loop, configurable
 sampling, and a MOSES-style evaluation suite — small enough to train on a single
 GPU in minutes, but reflecting current practice.
 
-![Image](./molecule.png)
+![molgen — a molecular generation pipeline: input, tokenize, model, sample, evaluate](./assets/pipeline.png)
 
 ## Features
 
@@ -64,6 +64,25 @@ molgen sample --checkpoint model.pt --num 1000 --top-p 0.95 --out generated.smi
 molgen eval   --generated generated.smi --reference molecules.smi
 ```
 
+## Example output
+
+Training `MolGPT` on the bundled (synthetic) sample and sampling 300 molecules
+produces a report like:
+
+```text
+n_generated: 300
+validity: 0.30
+uniqueness: 0.96
+novelty: 0.90
+internal_diversity: 0.90
+unique_scaffolds: 0.32
+snn: 0.47
+properties: {'qed': 0.52, 'logp': 1.71, 'mol_weight': 133.2, 'sa_score': 2.70}
+```
+
+These numbers reflect the tiny bundled sample — train on MOSES/QM9/ZINC for
+stronger models. (SELFIES mode guarantees 100% validity.)
+
 ## Models
 
 | Model | Module | Description |
@@ -79,11 +98,34 @@ Both `CharRNN` and `MolGPT` train and sample through the same trainer/sampler.
 The original VAE workflow is still available for generating molecules near a
 seed or interpolating between two molecules in latent space:
 
+![VAE encoder, latent space, and decoder](./molecule.png)
+
 ```bash
 python -m molgen.synthetic     # build a synthetic dataset (molecules.csv)
 python -m molgen.vae           # train the VAE
 python -m molgen.generate      # perturb the latent space
 python -m molgen.interpolate   # interpolate between two molecules
+```
+
+## Project structure
+
+```text
+molgen/
+├── chem.py              # validity / canonicalization / randomization (RDKit)
+├── tokenizers.py        # atom-level regex SMILES tokenizer
+├── selfies_tokenizer.py # SELFIES tokenizer (always-valid decoding)
+├── data.py              # SmilesDataset, padding collate, augmentation, sample loader
+├── synthetic.py         # synthetic dataset generators
+├── vae.py               # Transformer β-TC-VAE
+├── char_rnn.py          # GRU/LSTM language model
+├── molgpt.py            # decoder-only Transformer
+├── trainer.py           # AMP training loop
+├── sampling.py          # temperature / top-k / top-p decoding
+├── metrics.py           # validity, novelty, diversity, scaffolds, SNN, report
+├── properties.py        # QED / logP / MW / SA score
+├── checkpoint.py        # save & load model + tokenizer
+├── cli.py               # `molgen` command-line interface
+└── datasets/            # bundled sample SMILES
 ```
 
 ## Notes

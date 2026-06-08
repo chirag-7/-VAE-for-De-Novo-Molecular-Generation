@@ -1,0 +1,95 @@
+<!doctype html>
+<!--
+  Source for the README hero banner (assets/pipeline.png).
+  Render with a headless browser, e.g.:
+    chrome --headless --disable-gpu --force-device-scale-factor=2 \
+           --window-size=1200,440 --screenshot=pipeline.png pipeline.html
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body {
+        width: 1200px; height: 440px;
+        font-family: "Segoe UI", system-ui, -apple-system, Helvetica, Arial, sans-serif;
+        background: linear-gradient(135deg, #f8fafc 0%, #eef2ff 55%, #ecfeff 100%);
+        overflow: hidden;
+      }
+      .frame { position: relative; width: 100%; height: 100%; padding: 38px 56px; }
+      .mol { position: absolute; opacity: 0.07; stroke: #0f172a; stroke-width: 6; fill: none; }
+      .header { display: flex; align-items: baseline; gap: 18px; }
+      .logo { font-size: 58px; font-weight: 800; letter-spacing: -1.5px; color: #0f172a; }
+      .logo .accent { color: #14b8a6; }
+      .tag { font-size: 20px; color: #475569; font-weight: 500; }
+      .sub { margin-top: 6px; font-size: 16px; color: #64748b; }
+      .pipe { display: flex; align-items: stretch; gap: 0; margin-top: 40px; }
+      .card {
+        flex: 1; background: #ffffff; border-radius: 14px; padding: 18px 16px;
+        box-shadow: 0 8px 22px rgba(15, 23, 42, 0.08); border-top: 5px solid var(--c);
+      }
+      .card .k { font-size: 12px; font-weight: 700; letter-spacing: 1.5px;
+        text-transform: uppercase; color: var(--c); }
+      .card .t { font-size: 21px; font-weight: 700; color: #0f172a; margin-top: 8px; }
+      .card .d { font-size: 14px; color: #64748b; margin-top: 7px; line-height: 1.45; }
+      .arrow { display: flex; align-items: center; padding: 0 10px; color: #94a3b8;
+        font-size: 30px; font-weight: 700; }
+      .foot { position: absolute; bottom: 30px; left: 56px; font-size: 15px;
+        color: #475569; font-weight: 500; }
+      .foot b { color: #0f172a; }
+    </style>
+  </head>
+  <body>
+    <div class="frame">
+      <!-- decorative benzene ring + chain motifs -->
+      <svg class="mol" style="top:-40px; right:-30px;" width="260" height="260" viewBox="0 0 100 100">
+        <polygon points="50,8 86,29 86,71 50,92 14,71 14,29" />
+        <polygon points="50,22 74,36 74,64 50,78 26,64 26,36" />
+      </svg>
+      <svg class="mol" style="bottom:-30px; left:30px;" width="320" height="120" viewBox="0 0 200 60">
+        <polyline points="10,45 40,15 70,45 100,15 130,45 160,15 190,45" />
+        <line x1="100" y1="15" x2="100" y2="-15" />
+      </svg>
+
+      <div class="header">
+        <div class="logo">mol<span class="accent">gen</span></div>
+        <div class="tag">a lightweight toolkit for de novo molecular generation</div>
+      </div>
+      <div class="sub">SMILES &amp; SELFIES &middot; VAE / CharRNN / MolGPT &middot; AMP training &middot; MOSES-style metrics</div>
+
+      <div class="pipe">
+        <div class="card" style="--c:#6366f1;">
+          <div class="k">Input</div>
+          <div class="t">Molecules</div>
+          <div class="d">SMILES or SELFIES<br />e.g. <code>c1ccc(O)cc1</code></div>
+        </div>
+        <div class="arrow">&rarr;</div>
+        <div class="card" style="--c:#0ea5e9;">
+          <div class="k">Tokenize</div>
+          <div class="t">Atom-level</div>
+          <div class="d">regex SMILES or<br />SELFIES vocabulary</div>
+        </div>
+        <div class="arrow">&rarr;</div>
+        <div class="card" style="--c:#14b8a6;">
+          <div class="k">Model</div>
+          <div class="t">Generators</div>
+          <div class="d">VAE &middot; CharRNN<br />&middot; MolGPT</div>
+        </div>
+        <div class="arrow">&rarr;</div>
+        <div class="card" style="--c:#f59e0b;">
+          <div class="k">Sample</div>
+          <div class="t">Decode</div>
+          <div class="d">temperature<br />top-k &middot; top-p</div>
+        </div>
+        <div class="arrow">&rarr;</div>
+        <div class="card" style="--c:#10b981;">
+          <div class="k">Evaluate</div>
+          <div class="t">Metrics</div>
+          <div class="d">validity &middot; novelty<br />diversity &middot; QED / SA</div>
+        </div>
+      </div>
+
+      <div class="foot">Train on a single GPU in minutes &mdash; <b>pip install -e .</b> &middot; <b>molgen train / sample / eval</b></div>
+    </div>
+  </body>
+</html>
