@@ -48,6 +48,9 @@ Homepage = "https://github.com/DaoyuanLi2816/Molecule-Generator"
 Repository = "https://github.com/DaoyuanLi2816/Molecule-Generator"
 Issues = "https://github.com/DaoyuanLi2816/Molecule-Generator/issues"
 
+[project.scripts]
+molgen = "molgen.cli:main"
+
 [tool.setuptools.packages.find]
 include = ["molgen*"]
 
