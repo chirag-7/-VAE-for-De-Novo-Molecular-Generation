@@ -66,3 +66,11 @@ def test_evaluate_generation_without_reference_omits_novelty():
     report = evaluate_generation(["CCO", "c1ccccc1"])
     assert "novelty" not in report
     assert "snn" not in report
+
+
+def test_evaluate_generation_sample_size_bounds_quadratic_metrics():
+    generated = ["CCO", "c1ccccc1", "CCCCCC", "CC(=O)O", "CCN"]
+    report = evaluate_generation(generated, sample_size=2, seed=0)
+    assert report["n_generated"] == len(generated)
+    assert report["validity"] == 1.0
+    assert 0.0 <= report["internal_diversity"] <= 1.0
