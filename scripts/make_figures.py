@@ -3,8 +3,10 @@
 Produces two figures in ``assets/``:
 
 * ``generated_molecules.png``   - a grid of sampled structures.
-* ``controlled_generation.png`` - goal-directed generation: after fine-tuning
-  the model toward drug-likeness, the generated QED distribution shifts higher.
+* ``controlled_generation.png`` - goal-directed generation. Starting from one
+  base model, fine-tuning toward the most / least drug-like molecules steers the
+  generated QED distribution in both directions (panel A), which also moves the
+  samples through QED-vs-SA property space (panel B).
 
 Usage::
 
@@ -14,6 +16,7 @@ Usage::
 from __future__ import annotations
 
 import argparse
+import copy
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -26,20 +29,42 @@ from torch.utils.data import DataLoader
 from molgen.chem import canonicalize_smiles
 from molgen.data import SmilesDataset, build_dataloaders, load_sample_smiles, make_collate_fn
 from molgen.molgpt import MolGPT
-from molgen.properties import qed
+from molgen.properties import qed, sa_score
 from molgen.sampling import sample
 from molgen.selfies_tokenizer import SelfiesTokenizer
 from molgen.trainer import TrainConfig, train_language_model
 from molgen.utils import get_device, set_seed
 
 ASSETS = Path(__file__).resolve().parent.parent / "assets"
-BASE_COLOR = "#475569"  # slate
-FOCUS_COLOR = "#14b8a6"  # teal
+# (label, colour) for the steered series, in plotting order.
+SERIES = [("steer ↓ low", "#f59e0b"), ("baseline", "#475569"), ("steer ↑ high", "#14b8a6")]
 
 
 def _sample_canonical(model, tokenizer, n: int, device) -> list[str]:
     raw = sample(model, tokenizer, num_samples=n, max_len=80, top_p=0.95, device=device)
     return [c for s in raw if (c := canonicalize_smiles(s))]
+
+
+def _qed_sa(smiles: list[str]) -> tuple[np.ndarray, np.ndarray]:
+    qs, sas = [], []
+    for s in smiles:
+        q, a = qed(s), sa_score(s)
+        if q is not None and a is not None:
+            qs.append(q)
+            sas.append(a)
+    return np.array(qs), np.array(sas)
+
+
+def _finetune(model, subset, tokenizer, device, epochs: int) -> None:
+    loader = DataLoader(
+        SmilesDataset(subset, tokenizer, augment=True),
+        batch_size=32,
+        shuffle=True,
+        collate_fn=make_collate_fn(tokenizer.pad_id),
+    )
+    train_language_model(
+        model, loader, None, TrainConfig(epochs=epochs, lr=3e-4), device, tokenizer.pad_id
+    )
 
 
 def _molecule_grid(smiles: list[str], n: int = 15) -> None:
@@ -55,56 +80,53 @@ def _molecule_grid(smiles: list[str], n: int = 15) -> None:
     )
 
 
-def _controlled_generation(train_qed, base_qed, focus_qed) -> None:
+def _controlled_figure(
+    train_qed: np.ndarray, series: dict[str, tuple[np.ndarray, np.ndarray]]
+) -> None:
+    fig, (ax_a, ax_b) = plt.subplots(1, 2, figsize=(12.6, 5.0), dpi=150)
     xs = np.linspace(0.0, 1.0, 240)
-    fig, ax = plt.subplots(figsize=(7.6, 4.7), dpi=150)
 
-    ax.plot(
-        xs,
-        gaussian_kde(train_qed)(xs),
-        color="#94a3b8",
-        lw=1.6,
-        ls=":",
-        label=f"training set  (mean {np.mean(train_qed):.2f})",
+    # Panel A: bidirectional QED steering as KDE curves.
+    ax_a.plot(
+        xs, gaussian_kde(train_qed)(xs), color="#cbd5e1", lw=1.6, ls=":", label="training set"
     )
-    kb = gaussian_kde(base_qed)(xs)
-    ax.fill_between(xs, kb, color=BASE_COLOR, alpha=0.30)
-    ax.plot(
-        xs,
-        kb,
-        color=BASE_COLOR,
-        lw=2.4,
-        label=f"baseline generation  (mean {np.mean(base_qed):.2f})",
+    for label, color in SERIES:
+        q = series[label][0]
+        density = gaussian_kde(q)(xs)
+        ax_a.fill_between(xs, density, color=color, alpha=0.30)
+        ax_a.plot(xs, density, color=color, lw=2.4, label=f"{label}  (mean {q.mean():.2f})")
+    lo_m, hi_m = series[SERIES[0][0]][0].mean(), series[SERIES[2][0]][0].mean()
+    y = ax_a.get_ylim()[1] * 0.92
+    ax_a.annotate(
+        "",
+        xy=(hi_m, y),
+        xytext=(lo_m, y),
+        arrowprops=dict(arrowstyle="<|-|>", color="#0f172a", lw=1.6),
     )
-    kf = gaussian_kde(focus_qed)(xs)
-    ax.fill_between(xs, kf, color=FOCUS_COLOR, alpha=0.35)
-    ax.plot(
-        xs,
-        kf,
-        color=FOCUS_COLOR,
-        lw=2.4,
-        label=f"QED-focused generation  (mean {np.mean(focus_qed):.2f})",
+    ax_a.text(
+        (lo_m + hi_m) / 2, y * 1.03, f"{hi_m - lo_m:.2f} QED range", ha="center", fontweight="bold"
     )
+    ax_a.set_xlim(0, 1)
+    ax_a.set_xlabel("QED  (drug-likeness)")
+    ax_a.set_ylabel("density")
+    ax_a.set_title("Steering the QED distribution", fontweight="bold")
+    ax_a.legend(frameon=False, loc="upper left")
 
-    mb, mf = float(np.mean(base_qed)), float(np.mean(focus_qed))
-    y = ax.get_ylim()[1] * 0.9
-    ax.annotate(
-        "", xy=(mf, y), xytext=(mb, y), arrowprops=dict(arrowstyle="-|>", color="#0f172a", lw=1.8)
-    )
-    ax.text(
-        (mb + mf) / 2,
-        y * 1.03,
-        f"+{mf - mb:.2f} QED",
-        ha="center",
-        fontweight="bold",
-        color="#0f172a",
-    )
+    # Panel B: the same samples in QED-vs-SA property space.
+    for label, color in SERIES:
+        q, sa = series[label]
+        ax_b.scatter(
+            q[:300], sa[:300], s=14, color=color, alpha=0.45, edgecolors="none", label=label
+        )
+    ax_b.set_xlim(0, 1)
+    ax_b.set_xlabel("QED  (drug-likeness)")
+    ax_b.set_ylabel("SA score  (lower = easier to make)")
+    ax_b.set_title("Movement through property space", fontweight="bold")
+    ax_b.legend(frameon=False, loc="upper right")
 
-    ax.set_xlim(0, 1)
-    ax.set_xlabel("QED  (drug-likeness)")
-    ax.set_ylabel("density")
-    ax.set_title("Goal-directed generation: steering toward higher QED", fontweight="bold")
-    ax.legend(frameon=False, loc="upper left")
+    fig.suptitle(
+        "Goal-directed generation: one base model steered both ways", fontweight="bold", fontsize=14
+    )
     fig.tight_layout()
     fig.savefig(ASSETS / "controlled_generation.png")
     plt.close(fig)
@@ -150,39 +172,34 @@ def main() -> None:
     train_language_model(
         model, train_loader, val_loader, TrainConfig(epochs=args.epochs), device, tokenizer.pad_id
     )
+    base_state = copy.deepcopy(model.state_dict())
+
     baseline = _sample_canonical(model, tokenizer, args.num, device)
-    base_qed = [q for s in baseline if (q := qed(s)) is not None]
     _molecule_grid(baseline)
 
-    # Goal-directed fine-tuning: continue training on the most drug-like molecules.
-    scored = sorted(((qed(s), s) for s in data if qed(s) is not None), key=lambda t: -t[0])
-    high_qed = [s for _, s in scored[: int(0.4 * len(scored))]]
-    loader = DataLoader(
-        SmilesDataset(high_qed, tokenizer, augment=True),
-        batch_size=32,
-        shuffle=True,
-        collate_fn=make_collate_fn(tokenizer.pad_id),
-    )
-    print(f"Fine-tuning toward high QED for {args.focus_epochs} epochs...")
-    train_language_model(
-        model,
-        loader,
-        None,
-        TrainConfig(epochs=args.focus_epochs, lr=3e-4),
-        device,
-        tokenizer.pad_id,
-    )
-    focus_qed = [
-        q
-        for s in _sample_canonical(model, tokenizer, args.num, device)
-        if (q := qed(s)) is not None
-    ]
+    scored = sorted(((qed(s), s) for s in data if qed(s) is not None), key=lambda t: t[0])
+    cut = int(0.4 * len(scored))
+    low_subset = [s for _, s in scored[:cut]]
+    high_subset = [s for _, s in scored[-cut:]]
 
-    _controlled_generation([q for q, _ in scored], base_qed, focus_qed)
-    print(
-        f"QED mean: baseline {np.mean(base_qed):.3f} -> focused {np.mean(focus_qed):.3f}; "
-        f"figures written to {ASSETS}"
-    )
+    print(f"Fine-tuning toward high QED for {args.focus_epochs} epochs...")
+    model.load_state_dict(base_state)
+    _finetune(model, high_subset, tokenizer, device, args.focus_epochs)
+    high = _sample_canonical(model, tokenizer, args.num, device)
+
+    print(f"Fine-tuning toward low QED for {args.focus_epochs} epochs...")
+    model.load_state_dict(base_state)
+    _finetune(model, low_subset, tokenizer, device, args.focus_epochs)
+    low = _sample_canonical(model, tokenizer, args.num, device)
+
+    series = {
+        SERIES[0][0]: _qed_sa(low),
+        SERIES[1][0]: _qed_sa(baseline),
+        SERIES[2][0]: _qed_sa(high),
+    }
+    _controlled_figure(np.array([q for q, _ in scored]), series)
+    means = {k: f"{v[0].mean():.3f}" for k, v in series.items()}
+    print(f"QED means {means}; figures written to {ASSETS}")
 
 
 if __name__ == "__main__":
