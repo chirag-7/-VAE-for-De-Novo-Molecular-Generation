@@ -1,16 +1,14 @@
-"""Generate the figures shown in the README.
+"""Generate the README figures (trains on the GPU; all output is real).
 
-Trains a small SELFIES MolGPT on the bundled sample (so every sample is valid),
-generates molecules, and writes four figures to ``assets/``:
+Produces two figures in ``assets/``:
 
-* ``training_curve.png``        - train/validation loss
-* ``property_distributions.png``- generated vs. training QED/logP/MW/SA
-* ``chemical_space.png``        - Morgan-fingerprint PCA of both sets
-* ``generated_molecules.png``   - a grid of generated structures
+* ``generated_molecules.png``   - a grid of sampled structures.
+* ``controlled_generation.png`` - goal-directed generation: after fine-tuning
+  the model toward drug-likeness, the generated QED distribution shifts higher.
 
 Usage::
 
-    python scripts/make_figures.py --epochs 80 --num 1500
+    python scripts/make_figures.py --epochs 60 --focus-epochs 40 --num 1000
 """
 
 from __future__ import annotations
@@ -20,118 +18,103 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
-from rdkit import Chem, DataStructs
-from rdkit.Chem import Draw, rdFingerprintGenerator
-from sklearn.decomposition import PCA
+from rdkit import Chem
+from rdkit.Chem import Draw
+from scipy.stats import gaussian_kde
+from torch.utils.data import DataLoader
 
 from molgen.chem import canonicalize_smiles
-from molgen.data import build_dataloaders, load_sample_smiles
+from molgen.data import SmilesDataset, build_dataloaders, load_sample_smiles, make_collate_fn
 from molgen.molgpt import MolGPT
-from molgen.properties import logp, molecular_weight, qed, sa_score
+from molgen.properties import qed
 from molgen.sampling import sample
 from molgen.selfies_tokenizer import SelfiesTokenizer
 from molgen.trainer import TrainConfig, train_language_model
 from molgen.utils import get_device, set_seed
 
 ASSETS = Path(__file__).resolve().parent.parent / "assets"
-TRAIN_COLOR = "#475569"  # slate
-GEN_COLOR = "#14b8a6"  # teal
+BASE_COLOR = "#475569"  # slate
+FOCUS_COLOR = "#14b8a6"  # teal
 
 
-def _training_curve(history: list[dict]) -> None:
-    epochs = [h["epoch"] for h in history]
-    fig, ax = plt.subplots(figsize=(6.2, 4.0), dpi=140)
-    ax.plot(epochs, [h["train_loss"] for h in history], color=GEN_COLOR, lw=2.4, label="train")
-    ax.plot(
-        epochs,
-        [h["val_loss"] for h in history],
-        color=TRAIN_COLOR,
-        lw=2.4,
-        ls="--",
-        label="validation",
-    )
-    ax.set_xlabel("epoch")
-    ax.set_ylabel("cross-entropy loss")
-    ax.set_title("MolGPT training", fontweight="bold")
-    ax.legend(frameon=False)
-    ax.grid(alpha=0.3)
-    fig.tight_layout()
-    fig.savefig(ASSETS / "training_curve.png")
-    plt.close(fig)
+def _sample_canonical(model, tokenizer, n: int, device) -> list[str]:
+    raw = sample(model, tokenizer, num_samples=n, max_len=80, top_p=0.95, device=device)
+    return [c for s in raw if (c := canonicalize_smiles(s))]
 
 
-def _property_distributions(train: list[str], gen: list[str]) -> None:
-    panels = [
-        ("QED", qed),
-        ("logP", logp),
-        ("Molecular weight", molecular_weight),
-        ("SA score", sa_score),
-    ]
-    fig, axes = plt.subplots(2, 2, figsize=(9.0, 6.5), dpi=140)
-    for ax, (name, fn) in zip(axes.ravel(), panels):
-        t = [v for s in train if (v := fn(s)) is not None]
-        g = [v for s in gen if (v := fn(s)) is not None]
-        ax.hist(t, bins=30, density=True, color=TRAIN_COLOR, alpha=0.55, label="training")
-        ax.hist(g, bins=30, density=True, color=GEN_COLOR, alpha=0.55, label="generated")
-        ax.set_title(name, fontweight="bold")
-        ax.grid(alpha=0.25)
-    axes[0, 0].legend(frameon=False)
-    fig.suptitle("Property distributions: generated vs. training", fontweight="bold", fontsize=13)
-    fig.tight_layout()
-    fig.savefig(ASSETS / "property_distributions.png")
-    plt.close(fig)
-
-
-def _fingerprint_matrix(smiles_list: list[str]) -> np.ndarray:
-    generator = rdFingerprintGenerator.GetMorganGenerator(radius=2, fpSize=1024)
-    rows = []
-    for smiles in smiles_list:
-        mol = Chem.MolFromSmiles(smiles)
-        if mol is None:
-            continue
-        arr = np.zeros((1024,), dtype=np.int8)
-        DataStructs.ConvertToNumpyArray(generator.GetFingerprint(mol), arr)
-        rows.append(arr)
-    return np.array(rows, dtype=np.float32)
-
-
-def _chemical_space(train: list[str], gen: list[str]) -> None:
-    xt, xg = _fingerprint_matrix(train), _fingerprint_matrix(gen)
-    pca = PCA(n_components=2).fit(np.vstack([xt, xg]))
-    pt, pg = pca.transform(xt), pca.transform(xg)
-    fig, ax = plt.subplots(figsize=(6.5, 5.0), dpi=140)
-    ax.scatter(
-        pt[:, 0], pt[:, 1], s=18, color=TRAIN_COLOR, alpha=0.5, edgecolors="none", label="training"
-    )
-    ax.scatter(
-        pg[:, 0], pg[:, 1], s=18, color=GEN_COLOR, alpha=0.5, edgecolors="none", label="generated"
-    )
-    ax.set_xlabel("PC 1")
-    ax.set_ylabel("PC 2")
-    ax.set_title("Chemical space (Morgan-fingerprint PCA)", fontweight="bold")
-    ax.legend(frameon=False)
-    ax.grid(alpha=0.25)
-    fig.tight_layout()
-    fig.savefig(ASSETS / "chemical_space.png")
-    plt.close(fig)
-
-
-def _molecule_grid(gen: list[str], n: int = 15) -> None:
+def _molecule_grid(smiles: list[str], n: int = 15) -> None:
     mols = []
-    for smiles in gen:
-        mol = Chem.MolFromSmiles(smiles)
+    for s in smiles:
+        mol = Chem.MolFromSmiles(s)
         if mol is not None and 6 <= mol.GetNumHeavyAtoms() <= 24:
             mols.append(mol)
         if len(mols) >= n:
             break
-    image = Draw.MolsToGridImage(mols, molsPerRow=5, subImgSize=(230, 180))
-    image.save(ASSETS / "generated_molecules.png")
+    Draw.MolsToGridImage(mols, molsPerRow=5, subImgSize=(230, 180)).save(
+        ASSETS / "generated_molecules.png"
+    )
+
+
+def _controlled_generation(train_qed, base_qed, focus_qed) -> None:
+    xs = np.linspace(0.0, 1.0, 240)
+    fig, ax = plt.subplots(figsize=(7.6, 4.7), dpi=150)
+
+    ax.plot(
+        xs,
+        gaussian_kde(train_qed)(xs),
+        color="#94a3b8",
+        lw=1.6,
+        ls=":",
+        label=f"training set  (mean {np.mean(train_qed):.2f})",
+    )
+    kb = gaussian_kde(base_qed)(xs)
+    ax.fill_between(xs, kb, color=BASE_COLOR, alpha=0.30)
+    ax.plot(
+        xs,
+        kb,
+        color=BASE_COLOR,
+        lw=2.4,
+        label=f"baseline generation  (mean {np.mean(base_qed):.2f})",
+    )
+    kf = gaussian_kde(focus_qed)(xs)
+    ax.fill_between(xs, kf, color=FOCUS_COLOR, alpha=0.35)
+    ax.plot(
+        xs,
+        kf,
+        color=FOCUS_COLOR,
+        lw=2.4,
+        label=f"QED-focused generation  (mean {np.mean(focus_qed):.2f})",
+    )
+
+    mb, mf = float(np.mean(base_qed)), float(np.mean(focus_qed))
+    y = ax.get_ylim()[1] * 0.9
+    ax.annotate(
+        "", xy=(mf, y), xytext=(mb, y), arrowprops=dict(arrowstyle="-|>", color="#0f172a", lw=1.8)
+    )
+    ax.text(
+        (mb + mf) / 2,
+        y * 1.03,
+        f"+{mf - mb:.2f} QED",
+        ha="center",
+        fontweight="bold",
+        color="#0f172a",
+    )
+
+    ax.set_xlim(0, 1)
+    ax.set_xlabel("QED  (drug-likeness)")
+    ax.set_ylabel("density")
+    ax.set_title("Goal-directed generation: steering toward higher QED", fontweight="bold")
+    ax.legend(frameon=False, loc="upper left")
+    fig.tight_layout()
+    fig.savefig(ASSETS / "controlled_generation.png")
+    plt.close(fig)
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--epochs", type=int, default=80)
-    parser.add_argument("--num", type=int, default=1500)
+    parser.add_argument("--epochs", type=int, default=60)
+    parser.add_argument("--focus-epochs", type=int, default=40)
+    parser.add_argument("--num", type=int, default=1000)
     parser.add_argument("--seed", type=int, default=0)
     args = parser.parse_args()
 
@@ -162,21 +145,44 @@ def main() -> None:
         num_layers=3,
         pad_idx=tokenizer.pad_id,
     )
-    print(f"Training on {device} for {args.epochs} epochs...")
-    history = train_language_model(
+
+    print(f"Training base model on {device} for {args.epochs} epochs...")
+    train_language_model(
         model, train_loader, val_loader, TrainConfig(epochs=args.epochs), device, tokenizer.pad_id
     )
+    baseline = _sample_canonical(model, tokenizer, args.num, device)
+    base_qed = [q for s in baseline if (q := qed(s)) is not None]
+    _molecule_grid(baseline)
 
-    print(f"Sampling {args.num} molecules...")
-    raw = sample(model, tokenizer, num_samples=args.num, max_len=80, top_p=0.95, device=device)
-    generated = sorted({c for s in raw if (c := canonicalize_smiles(s))})
-    print(f"{len(generated)} unique valid molecules; writing figures to {ASSETS}")
+    # Goal-directed fine-tuning: continue training on the most drug-like molecules.
+    scored = sorted(((qed(s), s) for s in data if qed(s) is not None), key=lambda t: -t[0])
+    high_qed = [s for _, s in scored[: int(0.4 * len(scored))]]
+    loader = DataLoader(
+        SmilesDataset(high_qed, tokenizer, augment=True),
+        batch_size=32,
+        shuffle=True,
+        collate_fn=make_collate_fn(tokenizer.pad_id),
+    )
+    print(f"Fine-tuning toward high QED for {args.focus_epochs} epochs...")
+    train_language_model(
+        model,
+        loader,
+        None,
+        TrainConfig(epochs=args.focus_epochs, lr=3e-4),
+        device,
+        tokenizer.pad_id,
+    )
+    focus_qed = [
+        q
+        for s in _sample_canonical(model, tokenizer, args.num, device)
+        if (q := qed(s)) is not None
+    ]
 
-    _training_curve(history)
-    _property_distributions(data, generated)
-    _chemical_space(data, generated)
-    _molecule_grid(generated)
-    print("done")
+    _controlled_generation([q for q, _ in scored], base_qed, focus_qed)
+    print(
+        f"QED mean: baseline {np.mean(base_qed):.3f} -> focused {np.mean(focus_qed):.3f}; "
+        f"figures written to {ASSETS}"
+    )
 
 
 if __name__ == "__main__":
