@@ -1,82 +1,103 @@
+# Molecule-Generator
 
-# VAE-Based SMILES String Generator
+[![CI](https://github.com/DaoyuanLi2816/Molecule-Generator/actions/workflows/ci.yml/badge.svg)](https://github.com/DaoyuanLi2816/Molecule-Generator/actions/workflows/ci.yml)
+[![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 
-This project is a Variational Autoencoder (VAE)-based molecular SMILES string generator. It generates molecules composed of CHOH/CH2OH (referred to as A) and CH/CH2/CH3 (referred to as B) repeat units. The generated molecules are saturated and contain no rings. 
+A lightweight, modern toolkit for **de novo molecular generation** with deep
+sequence models. It provides atom-level SMILES and SELFIES tokenizers, several
+generator architectures, a mixed-precision training loop, configurable
+sampling, and a MOSES-style evaluation suite — small enough to train on a single
+GPU in minutes, but reflecting current practice.
 
 ![Image](./molecule.png)
 
-## Project Structure
-
-The project is organized as an installable `molgen` Python package:
-
-- `molgen/vae.py`: Defines the VAE model and includes functions for training and testing the model.
-- `molgen/generate.py`: Generates new SMILES strings by perturbing the latent space of the trained VAE.
-- `molgen/interpolate.py`: Generates interpolated SMILES strings between two given SMILES strings using the latent space of the trained VAE.
-- `molgen/synthetic.py`: Generates a synthetic dataset of SMILES strings based on specified constraints.
-
 ## Features
 
-- Generates over 100,000 synthetic SMILES strings.
-- Only A and B repeat units are included.
-- No molecule contains more than six consecutive A repeat units.
-- All molecules in the dataset are saturated and contain no rings.
+- **Representations** — atom-aware regex SMILES tokenizer and a SELFIES
+  tokenizer (every sequence decodes to a valid molecule).
+- **Models** — a Transformer β-TC-VAE, a GRU/LSTM `CharRNN`, and a
+  decoder-only `MolGPT`.
+- **Training** — teacher-forced loop with AdamW, gradient clipping, and
+  automatic mixed precision (AMP) on CUDA.
+- **Sampling** — autoregressive generation with temperature, top-k, and
+  top-p (nucleus) filtering.
+- **Metrics** — validity, uniqueness, novelty, internal diversity, unique
+  scaffolds, SNN, and QED / logP / MW / SA-score property summaries.
+- **Tooling** — `molgen` CLI, a bundled sample dataset, tests, CI, and ruff.
 
 ## Installation
 
-1. Clone the repository:
-    ```bash
-    git clone https://github.com/DaoyuanLi2816/Molecule-Generator.git
-    cd Molecule-Generator
-    ```
-
-2. Install the package and its dependencies:
-    ```bash
-    pip install -e .
-    ```
-    This installs `molgen` in editable mode together with its runtime dependencies
-    (PyTorch, RDKit, pandas, scikit-learn, tqdm). RDKit is required for molecular
-    operations; if you hit installation issues, see the
-    [RDKit install guide](https://www.rdkit.org/docs/Install.html).
-
-## Usage
-
-### Generating Synthetic Dataset
-
-To generate a synthetic dataset of SMILES strings:
 ```bash
-python -m molgen.synthetic
+git clone https://github.com/DaoyuanLi2816/Molecule-Generator.git
+cd Molecule-Generator
+pip install -e .            # add ".[selfies]" for SELFIES, ".[dev]" for tests
 ```
-This will create a CSV file named `molecules.csv` containing the generated SMILES strings.
 
-### Training the VAE Model
+## Quickstart (Python)
 
-To train the VAE model:
+```python
+from molgen.data import build_dataloaders, load_sample_smiles
+from molgen.tokenizers import SmilesTokenizer
+from molgen.molgpt import MolGPT
+from molgen.trainer import TrainConfig, train_language_model
+from molgen.sampling import sample
+from molgen.metrics import evaluate_generation
+
+smiles = load_sample_smiles()                      # bundled sample, or your own list
+tokenizer = SmilesTokenizer.from_smiles(smiles)
+train_loader, val_loader = build_dataloaders(smiles, tokenizer, augment=True)
+
+model = MolGPT(tokenizer.vocab_size, pad_idx=tokenizer.pad_id)
+train_language_model(model, train_loader, val_loader, TrainConfig(epochs=20), pad_idx=tokenizer.pad_id)
+
+generated = sample(model, tokenizer, num_samples=1000, top_p=0.95)
+print(evaluate_generation(generated, reference=smiles))
+```
+
+## Quickstart (CLI)
+
 ```bash
-python -m molgen.vae
+molgen train  --data molecules.smi --model molgpt --epochs 20 --out model.pt
+molgen sample --checkpoint model.pt --num 1000 --top-p 0.95 --out generated.smi
+molgen eval   --generated generated.smi --reference molecules.smi
 ```
-This will train the VAE model on the generated dataset and save the trained model as `beta_tc_vae_model.pth`.
 
-### Generating New SMILES Strings
+## Models
 
-To generate new SMILES strings using the trained VAE model:
+| Model | Module | Description |
+|-------|--------|-------------|
+| `CharRNN` | `molgen.char_rnn` | GRU/LSTM next-token language model (classic strong baseline) |
+| `MolGPT` | `molgen.molgpt` | Decoder-only Transformer with causal attention |
+| `BetaTCVAE` | `molgen.vae` | Transformer VAE for reconstruction and latent interpolation |
+
+Both `CharRNN` and `MolGPT` train and sample through the same trainer/sampler.
+
+## Latent-space exploration (VAE)
+
+The original VAE workflow is still available for generating molecules near a
+seed or interpolating between two molecules in latent space:
+
 ```bash
-python -m molgen.generate
+python -m molgen.synthetic     # build a synthetic dataset (molecules.csv)
+python -m molgen.vae           # train the VAE
+python -m molgen.generate      # perturb the latent space
+python -m molgen.interpolate   # interpolate between two molecules
 ```
-This will output new SMILES strings generated by perturbing the latent space of the trained VAE.
 
-### Interpolating Between Two SMILES Strings
+## Notes
 
-To generate interpolated SMILES strings between two given SMILES strings:
-```bash
-python -m molgen.interpolate
-```
-This will output SMILES strings that are interpolations between the two input SMILES strings in the latent space of the trained VAE.
-
+The bundled `load_sample_smiles()` set is **synthetic** (assembled from
+fragments) and intended for examples and tests; for real results, train on a
+dataset such as MOSES, QM9, or ZINC. SELFIES mode guarantees 100% validity;
+SMILES mode tends to learn the data distribution more faithfully.
 
 ## Contributing
 
-If you would like to contribute to this project, please open an issue or submit a pull request. We welcome contributions from the community.
+Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md). Please run
+`ruff check .`, `ruff format .`, and `pytest` before opening a pull request.
 
 ## License
 
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License. See [LICENSE](LICENSE).
