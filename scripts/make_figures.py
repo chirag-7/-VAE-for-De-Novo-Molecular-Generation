@@ -96,21 +96,27 @@ def _controlled_figure(
         ax_a.fill_between(xs, density, color=color, alpha=0.30)
         ax_a.plot(xs, density, color=color, lw=2.4, label=f"{label}  (mean {q.mean():.2f})")
     lo_m, hi_m = series[SERIES[0][0]][0].mean(), series[SERIES[2][0]][0].mean()
-    y = ax_a.get_ylim()[1] * 0.92
+    ymax = ax_a.get_ylim()[1]
+    ax_a.set_ylim(0, ymax * 1.34)  # headroom so the range marker clears the curves
+    y_arrow = ymax * 1.12
     ax_a.annotate(
         "",
-        xy=(hi_m, y),
-        xytext=(lo_m, y),
+        xy=(hi_m, y_arrow),
+        xytext=(lo_m, y_arrow),
         arrowprops=dict(arrowstyle="<|-|>", color="#0f172a", lw=1.6),
     )
     ax_a.text(
-        (lo_m + hi_m) / 2, y * 1.03, f"{hi_m - lo_m:.2f} QED range", ha="center", fontweight="bold"
+        (lo_m + hi_m) / 2,
+        ymax * 1.19,
+        f"{hi_m - lo_m:.2f} QED range",
+        ha="center",
+        fontweight="bold",
     )
     ax_a.set_xlim(0, 1)
     ax_a.set_xlabel("QED  (drug-likeness)")
     ax_a.set_ylabel("density")
     ax_a.set_title("Steering the QED distribution", fontweight="bold")
-    ax_a.legend(frameon=False, loc="upper left")
+    ax_a.legend(frameon=False, loc="upper left", fontsize=9)
 
     # Panel B: the same samples in QED-vs-SA property space.
     for label, color in SERIES:
@@ -119,10 +125,21 @@ def _controlled_figure(
             q[:300], sa[:300], s=14, color=color, alpha=0.45, edgecolors="none", label=label
         )
     ax_b.set_xlim(0, 1)
+    ymin_b, ymax_b = ax_b.get_ylim()
+    ax_b.set_ylim(ymin_b, ymax_b + (ymax_b - ymin_b) * 0.22)  # headroom for the legend
     ax_b.set_xlabel("QED  (drug-likeness)")
     ax_b.set_ylabel("SA score  (lower = easier to make)")
     ax_b.set_title("Movement through property space", fontweight="bold")
-    ax_b.legend(frameon=False, loc="upper right")
+    # Horizontal legend in the headroom band, clear of the scattered points.
+    ax_b.legend(
+        loc="upper center",
+        ncol=3,
+        frameon=False,
+        fontsize=9,
+        handletextpad=0.3,
+        columnspacing=1.2,
+        markerscale=1.6,
+    )
 
     fig.suptitle(
         "Goal-directed generation: one base model steered both ways", fontweight="bold", fontsize=14
