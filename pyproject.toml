@@ -55,6 +55,7 @@ molgen = "molgen.cli:main"
 include = ["molgen*"]
 
 [tool.setuptools.package-data]
+"molgen" = ["py.typed"]
 "molgen.datasets" = ["*.smi"]
 
 [tool.ruff]
