@@ -1,0 +1,20 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: "molgen: a lightweight toolkit for de novo molecular generation"
+abstract: >-
+  A lightweight, modern toolkit for de novo molecular generation with deep
+  sequence models: atom-level SMILES and SELFIES tokenizers, CharRNN / MolGPT /
+  VAE generators, a mixed-precision training loop, configurable sampling, and a
+  MOSES-style evaluation suite.
+authors:
+  - family-names: Li
+    given-names: Daoyuan
+repository-code: "https://github.com/DaoyuanLi2816/Molecule-Generator"
+license: MIT
+keywords:
+  - molecular-generation
+  - cheminformatics
+  - deep-learning
+  - SMILES
+  - SELFIES
+  - generative-model

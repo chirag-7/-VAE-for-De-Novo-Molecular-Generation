@@ -1,6 +1,8 @@
-"""molgen: a lightweight VAE-based molecular SMILES string generator.
+"""molgen: a lightweight toolkit for de novo molecular generation.
 
-See https://github.com/DaoyuanLi2816/Molecule-Generator for documentation.
+Provides SMILES and SELFIES tokenizers, CharRNN / MolGPT / VAE models, a
+mixed-precision training loop, configurable sampling, and a MOSES-style metric
+suite. See https://github.com/DaoyuanLi2816/Molecule-Generator for documentation.
 """
 
 from importlib.metadata import PackageNotFoundError, version
