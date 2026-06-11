@@ -1,0 +1,94 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 250" role="img" aria-label="molgen — lightweight de novo molecular generation: SMILES and SELFIES tokenizers, VAE / CharRNN / MolGPT generators, MOSES-style evaluation">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="55%" stop-color="#2e1065"/>
+      <stop offset="100%" stop-color="#6d28d9"/>
+    </linearGradient>
+    <clipPath id="bgclip">
+      <rect x="0" y="0" width="880" height="250" rx="16"/>
+    </clipPath>
+  </defs>
+
+  <rect x="0" y="0" width="880" height="250" rx="16" fill="url(#bg)"/>
+  <g clip-path="url(#bgclip)">
+    <circle cx="790" cy="0" r="190" fill="#8b5cf6" opacity="0.08"/>
+    <circle cx="350" cy="265" r="150" fill="#a78bfa" opacity="0.05"/>
+  </g>
+
+  <!-- ===== left column: brand ===== -->
+  <text x="40" y="84" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="44" font-weight="800" fill="#ffffff">molgen</text>
+  <rect x="42" y="94" width="64" height="3" rx="1.5" fill="#a78bfa" opacity="0.9"/>
+  <text x="40" y="124" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="15" fill="#cbd5e1">Lightweight de novo molecular generation</text>
+
+  <!-- stage chips -->
+  <g font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="12" text-anchor="middle">
+    <rect x="40" y="140" width="72" height="24" rx="12" fill="#34d399" fill-opacity="0.12" stroke="#34d399" stroke-opacity="0.65"/>
+    <text x="76" y="156" fill="#6ee7b7">tokenize</text>
+    <rect x="120" y="140" width="52" height="24" rx="12" fill="#60a5fa" fill-opacity="0.12" stroke="#60a5fa" stroke-opacity="0.65"/>
+    <text x="146" y="156" fill="#93c5fd">train</text>
+    <rect x="180" y="140" width="62" height="24" rx="12" fill="#fbbf24" fill-opacity="0.12" stroke="#fbbf24" stroke-opacity="0.65"/>
+    <text x="211" y="156" fill="#fde68a">sample</text>
+  </g>
+
+  <!-- context pill -->
+  <rect x="40" y="178" width="196" height="28" rx="14" fill="#a78bfa" fill-opacity="0.10" stroke="#a78bfa" stroke-opacity="0.55"/>
+  <text x="54" y="196" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="12.5" fill="#c4b5fd">SMILES &#183; SELFIES &#183; RDKit</text>
+
+  <!-- pip install pill -->
+  <rect x="40" y="214" width="170" height="26" rx="13" fill="#ffffff" fill-opacity="0.07" stroke="#ffffff" stroke-opacity="0.18"/>
+  <text x="54" y="231" font-family="ui-monospace, SFMono-Regular, Consolas, 'Courier New', monospace" font-size="12.5" fill="#e2e8f0">$ pip install molgen</text>
+
+  <!-- ===== card 1: representations ===== -->
+  <g>
+    <rect x="350" y="30" width="156" height="190" rx="12" fill="#ffffff" fill-opacity="0.05" stroke="#ffffff" stroke-opacity="0.13"/>
+    <circle cx="380" cy="62" r="16" fill="#38bdf8" fill-opacity="0.14" stroke="#38bdf8" stroke-opacity="0.55" stroke-width="1.4"/>
+    <polygon points="380,53.5 387.4,57.8 387.4,66.4 380,70.7 372.6,66.4 372.6,57.8" fill="none" stroke="#38bdf8" stroke-width="1.7" stroke-linejoin="round"/>
+    <circle cx="380" cy="62.1" r="1.6" fill="#38bdf8"/>
+    <g font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
+      <text x="366" y="102" font-size="14" font-weight="700" fill="#f1f5f9">SMILES &amp;</text>
+      <text x="366" y="120" font-size="14" font-weight="700" fill="#f1f5f9">SELFIES</text>
+      <text x="366" y="142" font-size="11.5" fill="#94a3b8">atom-aware tokenizers;</text>
+      <text x="366" y="158" font-size="11.5" fill="#94a3b8">robust round-trips</text>
+      <text x="366" y="180" font-size="10.5" fill="#fcd34d" fill-opacity="0.9">every SELFIES decodes</text>
+      <text x="366" y="195" font-size="10.5" fill="#fcd34d" fill-opacity="0.9">to a valid molecule</text>
+    </g>
+  </g>
+
+  <!-- ===== card 2: generators ===== -->
+  <g>
+    <rect x="520" y="30" width="156" height="190" rx="12" fill="#ffffff" fill-opacity="0.05" stroke="#ffffff" stroke-opacity="0.13"/>
+    <circle cx="550" cy="62" r="16" fill="#34d399" fill-opacity="0.14" stroke="#34d399" stroke-opacity="0.55" stroke-width="1.4"/>
+    <g stroke="#34d399" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none">
+      <path d="M 544 56 L 550 62 L 544 68"/>
+      <path d="M 552 56 L 558 62 L 552 68"/>
+    </g>
+    <g font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
+      <text x="536" y="102" font-size="14" font-weight="700" fill="#f1f5f9">Three</text>
+      <text x="536" y="120" font-size="14" font-weight="700" fill="#f1f5f9">generators</text>
+      <text x="536" y="142" font-size="11.5" fill="#94a3b8">Transformer &#946;-TC-VAE,</text>
+      <text x="536" y="158" font-size="11.5" fill="#94a3b8">CharRNN, MolGPT</text>
+      <text x="536" y="180" font-size="10.5" fill="#fcd34d" fill-opacity="0.9">trains on one GPU</text>
+      <text x="536" y="195" font-size="10.5" fill="#fcd34d" fill-opacity="0.9">in minutes</text>
+    </g>
+  </g>
+
+  <!-- ===== card 3: evaluation ===== -->
+  <g>
+    <rect x="690" y="30" width="156" height="190" rx="12" fill="#ffffff" fill-opacity="0.05" stroke="#ffffff" stroke-opacity="0.13"/>
+    <circle cx="720" cy="62" r="16" fill="#a78bfa" fill-opacity="0.14" stroke="#a78bfa" stroke-opacity="0.55" stroke-width="1.4"/>
+    <g stroke="#a78bfa" stroke-width="1.8" stroke-linecap="round" fill="none">
+      <path d="M 711 66 A 9 9 0 0 1 729 66"/>
+      <line x1="720" y1="66" x2="726" y2="59"/>
+    </g>
+    <circle cx="720" cy="66" r="1.6" fill="#a78bfa"/>
+    <g font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
+      <text x="706" y="102" font-size="14" font-weight="700" fill="#f1f5f9">MOSES-style</text>
+      <text x="706" y="120" font-size="14" font-weight="700" fill="#f1f5f9">evaluation</text>
+      <text x="706" y="142" font-size="11.5" fill="#94a3b8">validity, novelty,</text>
+      <text x="706" y="158" font-size="11.5" fill="#94a3b8">FCD, diversity, SNN</text>
+      <text x="706" y="180" font-size="10.5" fill="#fcd34d" fill-opacity="0.9">goal-directed steering</text>
+      <text x="706" y="195" font-size="10.5" fill="#fcd34d" fill-opacity="0.9">figure in the README</text>
+    </g>
+  </g>
+</svg>
