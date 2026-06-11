@@ -9,7 +9,7 @@ abstract: >-
 authors:
   - family-names: Li
     given-names: Daoyuan
-repository-code: "https://github.com/DaoyuanLi2816/Molecule-Generator"
+repository-code: "https://github.com/DaoyuanLi2816/molgen"
 license: MIT
 keywords:
   - molecular-generation

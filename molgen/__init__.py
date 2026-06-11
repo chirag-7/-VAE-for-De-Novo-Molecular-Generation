@@ -2,7 +2,7 @@
 
 Provides SMILES and SELFIES tokenizers, CharRNN / MolGPT / VAE models, a
 mixed-precision training loop, configurable sampling, and a MOSES-style metric
-suite. See https://github.com/DaoyuanLi2816/Molecule-Generator for documentation.
+suite. See https://github.com/DaoyuanLi2816/molgen for documentation.
 """
 
 from importlib.metadata import PackageNotFoundError, version

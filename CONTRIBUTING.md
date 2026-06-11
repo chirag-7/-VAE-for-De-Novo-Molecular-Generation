@@ -1,4 +1,4 @@
-# Contributing to Molecule-Generator
+# Contributing to molgen
 
 Thanks for your interest in improving this project! Contributions of all kinds
 are welcome — bug reports, fixes, new models, metrics, and documentation.
@@ -6,8 +6,8 @@ are welcome — bug reports, fixes, new models, metrics, and documentation.
 ## Development setup
 
 ```bash
-git clone https://github.com/DaoyuanLi2816/Molecule-Generator.git
-cd Molecule-Generator
+git clone https://github.com/DaoyuanLi2816/molgen.git
+cd molgen
 python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -e ".[dev]"
 pre-commit install
