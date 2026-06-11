@@ -44,9 +44,9 @@ selfies = ["selfies>=2.1"]
 dev = ["pytest>=7.0", "ruff>=0.4", "pre-commit>=3.5"]
 
 [project.urls]
-Homepage = "https://github.com/DaoyuanLi2816/Molecule-Generator"
-Repository = "https://github.com/DaoyuanLi2816/Molecule-Generator"
-Issues = "https://github.com/DaoyuanLi2816/Molecule-Generator/issues"
+Homepage = "https://github.com/DaoyuanLi2816/molgen"
+Repository = "https://github.com/DaoyuanLi2816/molgen"
+Issues = "https://github.com/DaoyuanLi2816/molgen/issues"
 
 [project.scripts]
 molgen = "molgen.cli:main"
