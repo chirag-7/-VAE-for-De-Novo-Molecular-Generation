@@ -45,17 +45,16 @@ def generate_nearby_smiles(
     """
     model.eval()
     seed_ids = torch.tensor([tokenizer.encode(smiles, max_len=max_len)], device=device)
-    pad_mask = seed_ids == tokenizer.pad_id
 
     with torch.no_grad():
-        memory, mu = model.encode(seed_ids)
+        mu, _ = model.encode(seed_ids)  # single latent vector for the seed
         seed_canon = canonicalize_smiles(smiles)
         results = set()
         for i in range(num_samples):
             direction = torch.randn_like(mu)
             direction = direction / direction.norm()
             z = mu + distance_multiplier * (i + 1) * direction
-            logits = model.decode_logits(z, memory, memory_pad_mask=pad_mask)
+            logits = model.decode(z, max_len)
             probs = torch.softmax(logits.squeeze(0) / temperature, dim=-1)
             ids = torch.multinomial(probs, 1).flatten().tolist()
             canon = canonicalize_smiles(tokenizer.decode(ids))

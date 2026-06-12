@@ -122,7 +122,7 @@ def cmd_vae_train(args: argparse.Namespace) -> None:
         vocab_size=tokenizer.vocab_size,
         embedding_dim=args.embedding_dim,
         hidden_dim=args.hidden_dim,
-        latent_dim=args.embedding_dim,
+        latent_dim=args.latent_dim,
         nhead=args.nhead,
         num_layers=args.num_layers,
         pad_idx=tokenizer.pad_id,
@@ -232,6 +232,7 @@ def build_parser() -> argparse.ArgumentParser:
     vae_train.add_argument("--batch-size", type=int, default=64)
     vae_train.add_argument("--lr", type=float, default=1e-3)
     vae_train.add_argument("--embedding-dim", type=int, default=64)
+    vae_train.add_argument("--latent-dim", type=int, default=32)
     vae_train.add_argument("--hidden-dim", type=int, default=256)
     vae_train.add_argument("--num-layers", type=int, default=2)
     vae_train.add_argument("--nhead", type=int, default=4)

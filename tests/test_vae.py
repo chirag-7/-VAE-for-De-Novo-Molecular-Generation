@@ -1,6 +1,5 @@
 """Tests for the BetaTCVAE model and loss."""
 
-import pytest
 import torch
 
 from molgen.vae import BetaTCVAE, PositionalEncoding, loss_function, masked_token_accuracy
@@ -25,8 +24,9 @@ def test_forward_output_shapes():
     x = torch.randint(0, 6, (batch, seq))
     out, mu, log_var = model(x)
     assert out.shape == (batch, seq, 6)
-    assert mu.shape == (batch, seq, 16)
-    assert log_var.shape == (batch, seq, 16)
+    # One fixed-size latent vector per molecule (not per position).
+    assert mu.shape == (batch, 16)
+    assert log_var.shape == (batch, 16)
 
 
 def test_loss_is_finite_scalar():
@@ -51,8 +51,8 @@ def test_backward_pass_populates_gradients():
 def test_loss_ignores_pad_positions():
     # Targets at positions 2, 3, 4 are padding (pad_idx=4).
     x = torch.tensor([[0, 1, 4, 4, 4]])
-    mu = torch.zeros(1, 5, 4)
-    log_var = torch.zeros(1, 5, 4)
+    mu = torch.zeros(1, 4)
+    log_var = torch.zeros(1, 4)
     recon_a = torch.randn(1, 5, 6)
     recon_b = recon_a.clone()
     # Change the logits only at the padding positions.
@@ -105,6 +105,10 @@ def test_positional_encoding_is_position_dependent():
     assert not torch.allclose(out[0, 0], out[0, 1])
 
 
-def test_latent_dim_must_equal_embedding_dim():
-    with pytest.raises(ValueError):
-        BetaTCVAE(10, 32, 64, 16, 4, 2, 0, torch.device("cpu"))
+def test_latent_dim_independent_of_embedding_dim():
+    # The latent is projected back to model width, so it can be a true
+    # bottleneck (smaller than the embedding) without raising.
+    model = BetaTCVAE(10, 32, 64, 8, 4, 2, 0, torch.device("cpu"))
+    out, mu, log_var = model(torch.randint(0, 10, (2, 6)))
+    assert out.shape == (2, 6, 10)
+    assert mu.shape == (2, 8)
