@@ -1,114 +1,98 @@
-import warnings
+"""Generate molecules near a seed by perturbing its VAE latent.
+
+Encode a seed molecule, jitter its latent mean with random directions of
+increasing magnitude, decode each perturbed latent, and keep the valid,
+canonical, distinct results. With a :class:`~molgen.selfies_tokenizer.SelfiesTokenizer`
+every decode is syntactically valid, so the only filtering is RDKit
+canonicalization and de-duplication against the seed.
+"""
+
+from __future__ import annotations
 
 import torch
-import torch.nn.functional as F
-from rdkit import Chem, RDLogger
 
-from molgen.vae import BetaTCVAE, SimpleTokenizer
+from molgen.chem import canonicalize_smiles
+
+__all__ = ["generate_nearby_smiles"]
 
 
 def generate_nearby_smiles(
-    model_path,
-    smiles,
+    model,
     tokenizer,
+    smiles,
     max_len,
     num_samples,
     device,
     temperature=1.0,
     distance_multiplier=0.5,
 ):
-    """
-    Generate nearby SMILES strings by perturbing the latent space representation.
+    """Sample canonical molecules near ``smiles`` in the VAE latent space.
 
     Args:
-        model_path (str): Path to the saved model.
-        smiles (str): Input SMILES string.
-        tokenizer (SimpleTokenizer): Tokenizer object to tokenize SMILES.
-        max_len (int): Maximum length of the tokenized sequences.
-        num_samples (int): Number of samples to generate.
-        device (torch.device): Device to run the model on.
-        temperature (float): Temperature for sampling.
-        distance_multiplier (float): Multiplier to adjust the distance in latent space.
+        model: A trained :class:`~molgen.vae.BetaTCVAE` (already on ``device``).
+        tokenizer: A toolkit tokenizer with ``encode``/``decode`` and ``pad_id``
+            (use :class:`~molgen.selfies_tokenizer.SelfiesTokenizer` for
+            always-valid decoding).
+        smiles: Seed SMILES to explore around.
+        max_len: Sequence length the model was trained at.
+        num_samples: Number of perturbed latents to decode.
+        device: Torch device.
+        temperature: Softmax temperature for sampling decoded tokens.
+        distance_multiplier: Scales the per-step latent perturbation magnitude.
 
     Returns:
-        list of str: List of generated SMILES strings.
+        Sorted list of distinct canonical SMILES (excluding the seed itself).
     """
-    # Load the model
-    vocab_size = tokenizer.vocab_size
-    embedding_dim = 16
-    hidden_dim = 64
-    latent_dim = 16
-    nhead = 4
-    num_layers = 2
-    pad_idx = tokenizer.pad_idx
-
-    model = BetaTCVAE(
-        vocab_size, embedding_dim, hidden_dim, latent_dim, nhead, num_layers, pad_idx, device
-    ).to(device)
-    model.load_state_dict(torch.load(model_path, map_location=device, weights_only=True))
     model.eval()
+    seed_ids = torch.tensor([tokenizer.encode(smiles, max_len=max_len)], device=device)
+    pad_mask = seed_ids == tokenizer.pad_id
 
-    tokenized_smiles = tokenizer.tokenize(smiles, max_len).unsqueeze(0).to(device)
-    embedded = model.embedding(tokenized_smiles)
-    encoded = model.encoder(embedded)
-    mu = model.mu(encoded)
+    with torch.no_grad():
+        memory, mu = model.encode(seed_ids)
+        seed_canon = canonicalize_smiles(smiles)
+        results = set()
+        for i in range(num_samples):
+            direction = torch.randn_like(mu)
+            direction = direction / direction.norm()
+            z = mu + distance_multiplier * (i + 1) * direction
+            logits = model.decode_logits(z, memory, memory_pad_mask=pad_mask)
+            probs = torch.softmax(logits.squeeze(0) / temperature, dim=-1)
+            ids = torch.multinomial(probs, 1).flatten().tolist()
+            canon = canonicalize_smiles(tokenizer.decode(ids))
+            if canon and canon != seed_canon:
+                results.add(canon)
 
-    generated_smiles = []
-    for i in range(num_samples):
-        random_direction = torch.randn_like(mu)
-        random_direction /= torch.norm(random_direction)
-        z = mu + distance_multiplier * (i + 1) * random_direction
-
-        decoded = model.decoder(z, encoded)
-        out = model.fc_out(decoded)
-        out = F.softmax(out / temperature, dim=-1)
-
-        generated_smiles_idx = torch.multinomial(out.squeeze(0), 1).cpu().numpy().flatten()
-        generated_smiles_str = "".join(
-            [
-                tokenizer.idx_to_char[min(int(idx), 4)]
-                for idx in generated_smiles_idx
-                if idx != tokenizer.pad_idx
-            ]
-        )
-
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            RDLogger.DisableLog("rdApp.*")
-            mol = Chem.MolFromSmiles(generated_smiles_str)
-
-        if mol is not None:
-            generated_smiles.append(generated_smiles_str)
-
-    return list(set(generated_smiles))
+    return sorted(results)
 
 
 def main():
-    # Example usage
-    input_smiles = "OC(CCCCCC)C(O)C(O)C(O)CCCCCCCCC"
-    num_samples = 5000
-    max_len = 172  # Set to the maximum sequence length used during training
-    temperature = 2.0
-    distance_multiplier = 0.5
-    model_path = "beta_tc_vae_model.pth"
+    """Train a tiny VAE on the bundled sample set and generate near a seed."""
+    from torch.utils.data import DataLoader, TensorDataset
+
+    from molgen.data import load_sample_smiles
+    from molgen.selfies_tokenizer import SelfiesTokenizer
+    from molgen.vae import BetaTCVAE, train
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    smiles = load_sample_smiles()
+    tokenizer = SelfiesTokenizer.from_smiles(smiles)
+    data = tokenizer.encode_batch(smiles, max_len=None)
+    max_len = data.shape[1]
 
-    simple_tokenizer = SimpleTokenizer()
-    generated_smiles = generate_nearby_smiles(
-        model_path,
-        input_smiles,
-        simple_tokenizer,
-        max_len,
-        num_samples,
-        device,
-        temperature,
-        distance_multiplier,
+    model = BetaTCVAE(tokenizer.vocab_size, 64, 256, 64, 4, 2, tokenizer.pad_id, device).to(device)
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
+    loader = DataLoader(TensorDataset(data), batch_size=64, shuffle=True)
+    for epoch in range(10):
+        train(model, loader, optimizer, device, beta=0.5, gamma=0.1)
+
+    seed = smiles[0]
+    generated = generate_nearby_smiles(
+        model, tokenizer, seed, max_len, 200, device, temperature=1.0
     )
-
-    print(f"Input SMILES: {input_smiles}")
-    print("Generated SMILES:")
-    for smiles in generated_smiles:
-        print(smiles)
+    print(f"Seed: {seed}")
+    print(f"Generated {len(generated)} distinct nearby molecules:")
+    for s in generated[:20]:
+        print(f"  {s}")
 
 
 if __name__ == "__main__":

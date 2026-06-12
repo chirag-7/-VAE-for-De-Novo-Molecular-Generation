@@ -1,114 +1,92 @@
-import warnings
+"""Interpolate between two molecules in the VAE latent space.
+
+Encode both endpoints to fixed length, walk the latent mean linearly from one
+to the other, and decode each step. With a
+:class:`~molgen.selfies_tokenizer.SelfiesTokenizer` every decoded point is a
+syntactically valid molecule, so the returned path is the ordered sequence of
+distinct canonical molecules seen along the way.
+"""
+
+from __future__ import annotations
 
 import torch
-import torch.nn.functional as F
-from rdkit import Chem, RDLogger
 
-from molgen.vae import BetaTCVAE, SimpleTokenizer
+from molgen.chem import canonicalize_smiles
+
+__all__ = ["interpolate_smiles"]
 
 
 def interpolate_smiles(
-    model_path, smiles_1, smiles_2, tokenizer, max_len, device, num_steps=5, temperature=1.0
+    model, tokenizer, smiles_1, smiles_2, max_len, device, num_steps=10, temperature=1.0
 ):
-    """
-    Interpolate between two SMILES strings in the latent space.
+    """Decode latent points on the line between two molecules.
 
     Args:
-        model_path (str): Path to the saved model.
-        smiles_1 (str): First SMILES string.
-        smiles_2 (str): Second SMILES string.
-        tokenizer (SimpleTokenizer): Tokenizer object to tokenize SMILES.
-        max_len (int): Maximum length of the tokenized sequences.
-        device (torch.device): Device to run the model on.
-        num_steps (int): Number of interpolation steps.
-        temperature (float): Temperature for sampling.
+        model: A trained :class:`~molgen.vae.BetaTCVAE` (already on ``device``).
+        tokenizer: A toolkit tokenizer with ``encode``/``decode`` and ``pad_id``.
+        smiles_1: Start SMILES.
+        smiles_2: End SMILES.
+        max_len: Sequence length the model was trained at.
+        device: Torch device.
+        num_steps: Number of interpolation steps (the path has ``num_steps + 1``
+            points, including both endpoints' latents).
+        temperature: Softmax temperature for sampling decoded tokens.
 
     Returns:
-        list of str: List of interpolated SMILES strings.
+        Ordered list of distinct canonical SMILES along the interpolation path.
     """
-    # Load the model
-    vocab_size = tokenizer.vocab_size
-    embedding_dim = 16
-    hidden_dim = 64
-    latent_dim = 16
-    nhead = 4
-    num_layers = 2
-    pad_idx = tokenizer.pad_idx
-
-    model = BetaTCVAE(
-        vocab_size, embedding_dim, hidden_dim, latent_dim, nhead, num_layers, pad_idx, device
-    ).to(device)
-    model.load_state_dict(torch.load(model_path, map_location=device, weights_only=True))
     model.eval()
+    ids_1 = torch.tensor([tokenizer.encode(smiles_1, max_len=max_len)], device=device)
+    ids_2 = torch.tensor([tokenizer.encode(smiles_2, max_len=max_len)], device=device)
 
-    tokenized_smiles_1 = tokenizer.tokenize(smiles_1, max_len).unsqueeze(0).to(device)
-    tokenized_smiles_2 = tokenizer.tokenize(smiles_2, max_len).unsqueeze(0).to(device)
+    with torch.no_grad():
+        memory_1, mu_1 = model.encode(ids_1)
+        memory_2, mu_2 = model.encode(ids_2)
+        memory = (memory_1 + memory_2) / 2
 
-    embedded_1 = model.embedding(tokenized_smiles_1)
-    encoded_1 = model.encoder(embedded_1)
-    mu_1 = model.mu(encoded_1)
+        path = []
+        seen = set()
+        for i in range(num_steps + 1):
+            alpha = i / num_steps
+            z = mu_1 * (1 - alpha) + mu_2 * alpha
+            logits = model.decode_logits(z, memory)
+            probs = torch.softmax(logits.squeeze(0) / temperature, dim=-1)
+            ids = torch.multinomial(probs, 1).flatten().tolist()
+            canon = canonicalize_smiles(tokenizer.decode(ids))
+            if canon and canon not in seen:
+                seen.add(canon)
+                path.append(canon)
 
-    embedded_2 = model.embedding(tokenized_smiles_2)
-    encoded_2 = model.encoder(embedded_2)
-    mu_2 = model.mu(encoded_2)
-
-    average_encoded = (encoded_1 + encoded_2) / 2
-
-    interpolated_smiles = []
-    for i in range(num_steps + 1):
-        alpha = i / num_steps
-        z = mu_1 * (1 - alpha) + mu_2 * alpha
-        decoded = model.decoder(z, average_encoded)
-        out = model.fc_out(decoded)
-        out = F.softmax(out / temperature, dim=-1)
-
-        generated_smiles_idx = torch.multinomial(out.squeeze(0), 1).cpu().numpy().flatten()
-        generated_smiles_str = "".join(
-            [
-                tokenizer.idx_to_char[min(int(idx), 4)]
-                for idx in generated_smiles_idx
-                if idx != tokenizer.pad_idx
-            ]
-        )
-
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            RDLogger.DisableLog("rdApp.*")
-            mol = Chem.MolFromSmiles(generated_smiles_str)
-
-        if mol is not None:
-            interpolated_smiles.append(generated_smiles_str)
-
-    return list(set(interpolated_smiles))
+    return path
 
 
 def main():
-    # Example usage
-    input_smiles = "OC(CCCCCC)C(O)C(O)C(O)CCCCCCCCC"
-    input_smiles_2 = "OCC(O)C(O)C(O)C(CCCC)CCCCCCCC"
-    num_steps = 5000
-    max_len = 172  # Set to the maximum sequence length used during training
-    temperature = 1.5
-    model_path = "beta_tc_vae_model.pth"
+    """Train a tiny VAE on the bundled sample set and interpolate two molecules."""
+    from torch.utils.data import DataLoader, TensorDataset
+
+    from molgen.data import load_sample_smiles
+    from molgen.selfies_tokenizer import SelfiesTokenizer
+    from molgen.vae import BetaTCVAE, train
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    smiles = load_sample_smiles()
+    tokenizer = SelfiesTokenizer.from_smiles(smiles)
+    data = tokenizer.encode_batch(smiles, max_len=None)
+    max_len = data.shape[1]
 
-    simple_tokenizer = SimpleTokenizer()
-    interpolated_smiles = interpolate_smiles(
-        model_path,
-        input_smiles,
-        input_smiles_2,
-        simple_tokenizer,
-        max_len,
-        device,
-        num_steps,
-        temperature,
-    )
+    model = BetaTCVAE(tokenizer.vocab_size, 64, 256, 64, 4, 2, tokenizer.pad_id, device).to(device)
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
+    loader = DataLoader(TensorDataset(data), batch_size=64, shuffle=True)
+    for epoch in range(10):
+        train(model, loader, optimizer, device, beta=0.5, gamma=0.1)
 
-    print(f"Input SMILES: {input_smiles}")
-    print(f"Input SMILES: {input_smiles_2}")
-    print("Generated SMILES:")
-    for smiles in interpolated_smiles:
-        print(smiles)
+    a, b = smiles[0], smiles[1]
+    path = interpolate_smiles(model, tokenizer, a, b, max_len, device, num_steps=10)
+    print(f"From: {a}")
+    print(f"To:   {b}")
+    print(f"Path ({len(path)} distinct molecules):")
+    for s in path:
+        print(f"  {s}")
 
 
 if __name__ == "__main__":

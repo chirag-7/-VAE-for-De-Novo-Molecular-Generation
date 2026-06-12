@@ -12,8 +12,9 @@ import torch
 from molgen.char_rnn import CharRNN
 from molgen.molgpt import MolGPT
 from molgen.tokenizers import SmilesTokenizer
+from molgen.vae import BetaTCVAE
 
-_MODELS = {"charrnn": CharRNN, "molgpt": MolGPT}
+_MODELS = {"charrnn": CharRNN, "molgpt": MolGPT, "vae": BetaTCVAE}
 
 
 def _tokenizer_kind(tokenizer) -> str:
