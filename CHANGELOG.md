@@ -7,6 +7,14 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Changed
+- `BetaTCVAE` is now a **sentence VAE**: a molecule is encoded to a single
+  fixed-size latent vector (masked mean-pool of the encoder states) rather than
+  a per-position latent, so each molecule is one point in latent space — the
+  natural setting for nearby sampling and interpolation. `latent_dim` is now
+  independent of `embedding_dim` (the latent is projected back up before
+  decoding), so it can act as a genuine bottleneck; `vae-train` gains a
+  `--latent-dim` flag. This also removes the decoder's cross-attention memory,
+  so generation and interpolation no longer differ in how they mask it.
 - The VAE latent-space workflow now uses the shared toolkit tokenizers instead
   of a private 4-character toy tokenizer, so it works on arbitrary molecules
   (not just the synthetic C/O/ring dataset). `SelfiesTokenizer` is the default,

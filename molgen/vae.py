@@ -1,10 +1,11 @@
 """Transformer beta-TC-VAE for reconstruction and latent-space exploration.
 
-The VAE encodes a (padded) token sequence to a per-position latent and decodes
-it back through a Transformer decoder. Unlike the autoregressive `CharRNN` /
-`MolGPT` models, it supports *latent-space* operations — sampling molecules
-near a seed and interpolating between two molecules — see
-:mod:`molgen.generate` and :mod:`molgen.interpolate`.
+This is a *sentence* VAE: each molecule is encoded to a single fixed-size latent
+vector (a masked mean-pool over the encoder states), so a molecule corresponds
+to one point in latent space. Unlike the autoregressive `CharRNN` / `MolGPT`
+models, it supports *latent-space* operations — sampling molecules near a seed
+and interpolating between two molecules — see :mod:`molgen.generate` and
+:mod:`molgen.interpolate`.
 
 Tokenization goes through the shared toolkit tokenizers
 (:class:`molgen.selfies_tokenizer.SelfiesTokenizer` is recommended, since its
@@ -48,17 +49,22 @@ class PositionalEncoding(nn.Module):
 
 
 class BetaTCVAE(nn.Module):
-    """Transformer beta-TC-VAE with a per-position latent.
+    """Transformer beta-TC-VAE with a single fixed-size latent per molecule.
+
+    The encoder maps a token sequence to one latent vector (masked mean-pool of
+    the encoder states); the decoder broadcasts that vector across positions,
+    adds positional encodings, and predicts every token in parallel. ``latent_dim``
+    is independent of ``embedding_dim`` — the latent is projected back up to the
+    model width before decoding, so the latent acts as a genuine bottleneck.
 
     Args:
         vocab_size: Tokenizer vocabulary size.
-        embedding_dim: Token embedding width. Must equal ``latent_dim`` because
-            the decoder consumes the latent ``z`` directly as its target stream.
+        embedding_dim: Token embedding / model width.
         hidden_dim: Transformer feed-forward width.
-        latent_dim: Latent width (kept equal to ``embedding_dim``).
+        latent_dim: Latent vector width (the molecule embedding).
         nhead: Number of attention heads.
         num_layers: Number of encoder/decoder layers.
-        pad_idx: Padding token id (masked out of attention and the loss).
+        pad_idx: Padding token id (masked out of attention, pooling, and loss).
         device: Device used for the reparameterization noise.
     """
 
@@ -66,12 +72,6 @@ class BetaTCVAE(nn.Module):
         self, vocab_size, embedding_dim, hidden_dim, latent_dim, nhead, num_layers, pad_idx, device
     ):
         super().__init__()
-        if latent_dim != embedding_dim:
-            raise ValueError(
-                f"latent_dim ({latent_dim}) must equal embedding_dim ({embedding_dim}); "
-                "the decoder consumes the latent directly as its target stream."
-            )
-
         self.embedding = nn.Embedding(vocab_size, embedding_dim, padding_idx=pad_idx)
         self.pos_encoder = PositionalEncoding(embedding_dim)
         self.encoder = nn.TransformerEncoder(
@@ -81,8 +81,12 @@ class BetaTCVAE(nn.Module):
         self.mu = nn.Linear(embedding_dim, latent_dim)
         self.log_var = nn.Linear(embedding_dim, latent_dim)
 
-        self.decoder = nn.TransformerDecoder(
-            nn.TransformerDecoderLayer(embedding_dim, nhead, hidden_dim, batch_first=True),
+        # Decoder: project the latent back to model width, broadcast across
+        # positions, and refine with self-attention (no encoder cross-attention,
+        # so there is no source memory / memory mask).
+        self.latent_to_hidden = nn.Linear(latent_dim, embedding_dim)
+        self.decoder = nn.TransformerEncoder(
+            nn.TransformerEncoderLayer(embedding_dim, nhead, hidden_dim, batch_first=True),
             num_layers=num_layers,
         )
         self.fc_out = nn.Linear(embedding_dim, vocab_size)
@@ -96,34 +100,27 @@ class BetaTCVAE(nn.Module):
         return mu + eps * std
 
     def encode(self, x):
-        """Encode token ids to ``(memory, mu)``.
+        """Encode token ids to ``(mu, log_var)``, each of shape ``(batch, latent)``.
 
-        ``memory`` is the encoder output consumed by the decoder; ``mu`` is the
-        latent mean. Both have shape ``(batch, seq, dim)``. Padding positions
-        are masked out of attention.
+        Padding positions are masked out of both attention and the mean-pool, so
+        the latent reflects only real tokens.
         """
         pad_mask = x == self.pad_idx
-        embedded = self.pos_encoder(self.embedding(x))
-        memory = self.encoder(embedded, src_key_padding_mask=pad_mask)
-        return memory, self.mu(memory)
+        h = self.encoder(self.pos_encoder(self.embedding(x)), src_key_padding_mask=pad_mask)
+        weights = (~pad_mask).unsqueeze(-1).float()  # (batch, seq, 1)
+        pooled = (h * weights).sum(dim=1) / weights.sum(dim=1).clamp(min=1.0)  # (batch, dim)
+        return self.mu(pooled), self.log_var(pooled)
 
-    def decode_logits(self, z, memory, memory_pad_mask=None):
-        """Decode a latent ``z`` against encoder ``memory`` to vocab logits."""
-        decoded = self.decoder(z, memory, memory_key_padding_mask=memory_pad_mask)
-        return self.fc_out(decoded)
+    def decode(self, z, seq_len):
+        """Decode a latent ``z`` (batch, latent) to vocab logits (batch, seq_len, vocab)."""
+        hidden = self.latent_to_hidden(z).unsqueeze(1).expand(-1, seq_len, -1)
+        hidden = self.pos_encoder(hidden)
+        return self.fc_out(self.decoder(hidden))
 
     def forward(self, x):
-        pad_mask = x == self.pad_idx
-        memory, mu = self.encode(x)
-        log_var = self.log_var(memory)
+        mu, log_var = self.encode(x)
         z = self.reparameterize(mu, log_var)
-        decoded = self.decoder(
-            z,
-            memory,
-            tgt_key_padding_mask=pad_mask,
-            memory_key_padding_mask=pad_mask,
-        )
-        return self.fc_out(decoded), mu, log_var
+        return self.decode(z, x.size(1)), mu, log_var
 
 
 def loss_function(recon_x, x, mu, log_var, beta, gamma, pad_idx=-100):
@@ -199,12 +196,11 @@ def main():
     tokenizer = SelfiesTokenizer.from_smiles(smiles)
     data = tokenizer.encode_batch(smiles, max_len=None)
 
-    embedding_dim = latent_dim = 64
     model_kwargs = dict(
         vocab_size=tokenizer.vocab_size,
-        embedding_dim=embedding_dim,
+        embedding_dim=64,
         hidden_dim=256,
-        latent_dim=latent_dim,
+        latent_dim=32,
         nhead=4,
         num_layers=2,
         pad_idx=tokenizer.pad_id,

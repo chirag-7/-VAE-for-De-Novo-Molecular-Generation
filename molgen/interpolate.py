@@ -40,16 +40,15 @@ def interpolate_smiles(
     ids_2 = torch.tensor([tokenizer.encode(smiles_2, max_len=max_len)], device=device)
 
     with torch.no_grad():
-        memory_1, mu_1 = model.encode(ids_1)
-        memory_2, mu_2 = model.encode(ids_2)
-        memory = (memory_1 + memory_2) / 2
+        mu_1, _ = model.encode(ids_1)  # single latent vector per endpoint
+        mu_2, _ = model.encode(ids_2)
 
         path = []
         seen = set()
         for i in range(num_steps + 1):
             alpha = i / num_steps
             z = mu_1 * (1 - alpha) + mu_2 * alpha
-            logits = model.decode_logits(z, memory)
+            logits = model.decode(z, max_len)
             probs = torch.softmax(logits.squeeze(0) / temperature, dim=-1)
             ids = torch.multinomial(probs, 1).flatten().tolist()
             canon = canonicalize_smiles(tokenizer.decode(ids))

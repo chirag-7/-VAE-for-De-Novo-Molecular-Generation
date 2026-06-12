@@ -112,7 +112,7 @@ property space. Generation can be steered toward a target, not just imitated:
 |-------|--------|-------------|
 | `CharRNN` | `molgen.char_rnn` | GRU/LSTM next-token language model (classic strong baseline) |
 | `MolGPT` | `molgen.molgpt` | Decoder-only Transformer with causal attention |
-| `BetaTCVAE` | `molgen.vae` | Transformer VAE for reconstruction and latent interpolation |
+| `BetaTCVAE` | `molgen.vae` | Sentence VAE (one fixed-size latent per molecule) for reconstruction, nearby sampling, and interpolation |
 
 Both `CharRNN` and `MolGPT` train and sample through the same trainer/sampler.
 
