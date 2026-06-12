@@ -1,60 +1,64 @@
-"""Integration tests for the generate / interpolate entry points."""
+"""Integration tests for the VAE latent-space entry points.
+
+Train a tiny VAE on a handful of bundled molecules (CPU, a few seconds) and
+check that ``generate_nearby_smiles`` and ``interpolate_smiles`` produce valid,
+distinct molecules. With the SELFIES tokenizer every decode is syntactically
+valid, so these assert the end-to-end plumbing rather than model quality.
+"""
+
+import os
 
 import torch
-from rdkit import Chem
+from torch.utils.data import DataLoader, TensorDataset
 
+from molgen.chem import is_valid_smiles
 from molgen.generate import generate_nearby_smiles
 from molgen.interpolate import interpolate_smiles
-from molgen.vae import BetaTCVAE, SimpleTokenizer
+from molgen.selfies_tokenizer import SelfiesTokenizer
+from molgen.vae import BetaTCVAE, train
+
+_SAMPLE = os.path.join(os.path.dirname(__file__), "..", "molgen", "datasets", "sample_smiles.smi")
 
 
-def _save_tiny_model(path):
-    # Architecture must match the config generate/interpolate derive from the tokenizer.
-    tok = SimpleTokenizer()
-    model = BetaTCVAE(
-        vocab_size=tok.vocab_size,
-        embedding_dim=16,
-        hidden_dim=64,
-        latent_dim=16,
-        nhead=4,
-        num_layers=2,
-        pad_idx=tok.pad_idx,
-        device=torch.device("cpu"),
-    )
-    torch.save(model.state_dict(), path)
+def _corpus(n=60):
+    return [s.strip() for s in open(_SAMPLE).read().splitlines() if s.strip()][:n]
 
 
-def test_generate_nearby_smiles_runs_on_explicit_device(tmp_path):
-    ckpt = tmp_path / "model.pth"
-    _save_tiny_model(ckpt)
+def _train_tiny_vae(smiles, tokenizer, epochs=6):
+    torch.manual_seed(0)
+    data = tokenizer.encode_batch(smiles, max_len=None)
+    device = torch.device("cpu")
+    model = BetaTCVAE(tokenizer.vocab_size, 32, 64, 32, 4, 2, tokenizer.pad_id, device)
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
+    loader = DataLoader(TensorDataset(data), batch_size=16, shuffle=True)
+    for _ in range(epochs):
+        train(model, loader, optimizer, device, beta=0.5, gamma=0.1)
+    return model, data.shape[1]
+
+
+def test_generate_nearby_produces_valid_distinct_molecules():
+    smiles = _corpus()
+    tok = SelfiesTokenizer.from_smiles(smiles)
+    model, max_len = _train_tiny_vae(smiles, tok)
+
+    seed = smiles[0]
     out = generate_nearby_smiles(
-        str(ckpt),
-        "CCO",
-        SimpleTokenizer(),
-        max_len=12,
-        num_samples=5,
-        device=torch.device("cpu"),
-        temperature=1.0,
+        model, tok, seed, max_len, 50, torch.device("cpu"), temperature=1.0
     )
-    assert isinstance(out, list)
-    # The function only returns RDKit-parseable SMILES.
-    for smi in out:
-        assert Chem.MolFromSmiles(smi) is not None
+    assert len(out) > 0  # SELFIES decoding makes every sample a valid molecule
+    assert all(is_valid_smiles(s) for s in out)
+    assert len(out) == len(set(out))  # distinct
+    assert seed not in out  # the seed itself is excluded
 
 
-def test_interpolate_smiles_runs_on_explicit_device(tmp_path):
-    ckpt = tmp_path / "model.pth"
-    _save_tiny_model(ckpt)
-    out = interpolate_smiles(
-        str(ckpt),
-        "CCO",
-        "CCCO",
-        SimpleTokenizer(),
-        max_len=12,
-        device=torch.device("cpu"),
-        num_steps=5,
-        temperature=1.0,
+def test_interpolate_returns_valid_ordered_path():
+    smiles = _corpus()
+    tok = SelfiesTokenizer.from_smiles(smiles)
+    model, max_len = _train_tiny_vae(smiles, tok)
+
+    path = interpolate_smiles(
+        model, tok, smiles[0], smiles[1], max_len, torch.device("cpu"), num_steps=8
     )
-    assert isinstance(out, list)
-    for smi in out:
-        assert Chem.MolFromSmiles(smi) is not None
+    assert len(path) > 0
+    assert all(is_valid_smiles(s) for s in path)
+    assert len(path) == len(set(path))  # distinct along the path

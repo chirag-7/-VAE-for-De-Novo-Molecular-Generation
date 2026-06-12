@@ -4,6 +4,24 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/), and the project aims to follow
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+- The VAE latent-space workflow now uses the shared toolkit tokenizers instead
+  of a private 4-character toy tokenizer, so it works on arbitrary molecules
+  (not just the synthetic C/O/ring dataset). `SelfiesTokenizer` is the default,
+  making every decoded sample a syntactically valid molecule.
+- `generate`/`interpolate` now take an in-memory `(model, tokenizer)` pair and
+  reuse the standard checkpoint format, and are exposed as first-class CLI
+  commands: `molgen vae-train`, `molgen vae-sample`, `molgen vae-interpolate`.
+
+### Fixed
+- Latent-space generation and interpolation previously returned **no
+  molecules**: decoded token ids were clamped to `min(idx, 4)` (collapsing
+  every output onto the pad/first tokens) and the toy tokenizer could only
+  represent `C`, `O`, `(`, `)`. Both paths now produce valid, distinct
+  molecules (covered by end-to-end tests in `tests/test_generate.py`).
+
 ## [0.1.0]
 
 A ground-up modernization that turns the original VAE-only collection of scripts

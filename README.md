@@ -118,17 +118,27 @@ Both `CharRNN` and `MolGPT` train and sample through the same trainer/sampler.
 
 ## Latent-space exploration (VAE)
 
-The original VAE workflow is still available for generating molecules near a
-seed or interpolating between two molecules in latent space:
+Unlike the autoregressive models, the VAE supports **latent-space** operations:
+generate molecules *near* a seed, or *interpolate* between two molecules. Pair it
+with the SELFIES tokenizer (`--tokenizer selfies`, the default for these
+commands) so every decoded point is a syntactically valid molecule.
 
 ![VAE encoder, latent space, and decoder](https://raw.githubusercontent.com/DaoyuanLi2816/molgen/main/molecule.png)
 
 ```bash
-python -m molgen.synthetic     # build a synthetic dataset (molecules.csv)
-python -m molgen.vae           # train the VAE
-python -m molgen.generate      # perturb the latent space
-python -m molgen.interpolate   # interpolate between two molecules
+# Train a VAE and save a checkpoint (model + tokenizer in one file).
+molgen vae-train --data molgen/datasets/sample_smiles.smi --epochs 20 --out vae.pt
+
+# Sample molecules near a seed by perturbing its latent.
+molgen vae-sample --checkpoint vae.pt --seed-smiles "BrCC1CCCCC1" --num 100
+
+# Walk the latent line between two molecules.
+molgen vae-interpolate --checkpoint vae.pt --start "BrCC1CCCCC1" --end "BrCc1ccc[nH]1"
 ```
+
+Each command also has a zero-config demo entry point that trains a tiny model on
+the bundled dataset and runs end to end: `python -m molgen.generate` /
+`python -m molgen.interpolate`.
 
 ## Project structure
 

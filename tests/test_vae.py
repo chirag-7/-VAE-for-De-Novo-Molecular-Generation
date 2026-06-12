@@ -1,5 +1,6 @@
 """Tests for the BetaTCVAE model and loss."""
 
+import pytest
 import torch
 
 from molgen.vae import BetaTCVAE, PositionalEncoding, loss_function, masked_token_accuracy
@@ -102,3 +103,8 @@ def test_positional_encoding_is_position_dependent():
     assert out.shape == (1, 10, 16)
     # With a zero input the output is the positional code, which differs per position.
     assert not torch.allclose(out[0, 0], out[0, 1])
+
+
+def test_latent_dim_must_equal_embedding_dim():
+    with pytest.raises(ValueError):
+        BetaTCVAE(10, 32, 64, 16, 4, 2, 0, torch.device("cpu"))
