@@ -132,7 +132,9 @@ def cmd_vae_train(args: argparse.Namespace) -> None:
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
     loader = DataLoader(TensorDataset(data), batch_size=args.batch_size, shuffle=True)
     for epoch in range(args.epochs):
-        loss = train(model, loader, optimizer, device, beta=args.beta, gamma=args.gamma)
+        loss = train(
+            model, loader, optimizer, device, beta=args.beta, gamma=args.gamma, alpha=args.alpha
+        )
         print(f"Epoch {epoch + 1}/{args.epochs}: loss={loss:.4f}")
     save_checkpoint(args.out, model, "vae", kwargs, tokenizer)
     print(f"Saved checkpoint to {args.out}")
@@ -236,8 +238,13 @@ def build_parser() -> argparse.ArgumentParser:
     vae_train.add_argument("--hidden-dim", type=int, default=256)
     vae_train.add_argument("--num-layers", type=int, default=2)
     vae_train.add_argument("--nhead", type=int, default=4)
-    vae_train.add_argument("--beta", type=float, default=0.5)
-    vae_train.add_argument("--gamma", type=float, default=0.1)
+    vae_train.add_argument(
+        "--beta", type=float, default=4.0, help="total-correlation weight (disentanglement)"
+    )
+    vae_train.add_argument("--gamma", type=float, default=1.0, help="dimension-wise KL weight")
+    vae_train.add_argument(
+        "--alpha", type=float, default=1.0, help="index-code mutual-information weight"
+    )
     vae_train.add_argument("--seed", type=int, default=42)
     vae_train.add_argument("--out", default="vae_model.pt")
     vae_train.set_defaults(func=cmd_vae_train)
