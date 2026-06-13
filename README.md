@@ -37,9 +37,16 @@ GPU in minutes, but reflecting current practice.
 ## Installation
 
 ```bash
+pip install molgen              # from PyPI
+pip install "molgen[selfies]"   # + SELFIES (always-valid decoding)
+```
+
+From source (for development / running the tests):
+
+```bash
 git clone https://github.com/DaoyuanLi2816/molgen.git
 cd molgen
-pip install -e .            # add ".[selfies]" for SELFIES, ".[dev]" for tests
+pip install -e ".[selfies,dev]"
 ```
 
 ## Quickstart (Python)
