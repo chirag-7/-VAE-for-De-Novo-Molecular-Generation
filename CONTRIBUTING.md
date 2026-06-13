@@ -9,7 +9,7 @@ are welcome — bug reports, fixes, new models, metrics, and documentation.
 git clone https://github.com/DaoyuanLi2816/molgen.git
 cd molgen
 python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
-pip install -e ".[dev]"
+pip install -e ".[dev,selfies]"
 pre-commit install
 ```
 
