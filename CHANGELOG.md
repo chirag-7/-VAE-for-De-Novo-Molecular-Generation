@@ -7,6 +7,13 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Changed
+- `BetaTCVAE` now optimizes a **genuine β-TC-VAE objective**: the KL term is
+  decomposed into index-code mutual information, **total correlation**, and the
+  dimension-wise KL (Chen et al., 2018), estimated with minibatch stratified
+  sampling. `beta` now scales the real total-correlation term `KL[q(z) ||
+  prod_j q(z_j)]` instead of the earlier closed-form proxy that was a function
+  of the posterior variance only. `forward` returns `(logits, mu, log_var, z)`;
+  `vae-train` gains an `--alpha` flag (defaults: `alpha=1`, `beta=4`, `gamma=1`).
 - `BetaTCVAE` is now a **sentence VAE**: a molecule is encoded to a single
   fixed-size latent vector (masked mean-pool of the encoder states) rather than
   a per-position latent, so each molecule is one point in latent space — the
