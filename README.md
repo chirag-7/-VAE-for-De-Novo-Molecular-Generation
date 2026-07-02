@@ -180,11 +180,6 @@ SMILES mode tends to learn the data distribution more faithfully.
 Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md). Please run
 `ruff check .`, `ruff format .`, and `pytest` before opening a pull request.
 
-## Citation
-
-If you use this toolkit in your work, please cite it via the **Cite this
-repository** button on GitHub (metadata in [`CITATION.cff`](CITATION.cff)).
-
 ## License
 
 This project is licensed under the MIT License. See [LICENSE](LICENSE).
